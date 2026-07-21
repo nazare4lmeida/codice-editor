@@ -81,23 +81,26 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       {
         name: "description",
         content:
-          "Editor JavaScript compartilhado ao vivo para instrutores e alunos. Digite, execute e veja resultados juntos, em tempo real.",
+          "Ensine programação com um editor de código ao vivo. Alunos e instrutor digitam no mesmo espaço e veem execuções em tempo real.",
       },
-      { property: "og:title", content: "CodeLive — Editor colaborativo ao vivo" },
+      { property: "og:title", content: "CodeLive — Editor de código colaborativo para aulas" },
       {
         property: "og:description",
         content:
-          "Sala compartilhada de código JavaScript para aulas de programação.",
+          "Ensine programação com um editor de código ao vivo. Alunos e instrutor digitam no mesmo espaço e veem execuções em tempo real.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:title", content: "CodeLive — Editor de código colaborativo para aulas" },
+      { name: "twitter:description", content: "Ensine programação com um editor de código ao vivo. Alunos e instrutor digitam no mesmo espaço e veem execuções em tempo real." },
+      { property: "og:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/attachments/og-images/1fac3f4c-9b8f-4d14-be53-fe0d29869842" },
+      { name: "twitter:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/attachments/og-images/1fac3f4c-9b8f-4d14-be53-fe0d29869842" },
     ],
     links: [
       {
         rel: "stylesheet",
         href: appCss,
       },
-      { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
     ],
   }),
   shellComponent: RootShell,

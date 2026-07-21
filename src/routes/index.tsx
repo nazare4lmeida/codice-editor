@@ -12,11 +12,11 @@ export const Route = createFileRoute("/")({
         content:
           "Ensine programação com um editor de código ao vivo. Alunos e instrutor digitam no mesmo espaço e veem execuções em tempo real.",
       },
-      { property: "og:title", content: "CodeLive — Editor colaborativo ao vivo" },
+      { property: "og:title", content: "CodeLive — Editor de código colaborativo para aulas" },
       {
         property: "og:description",
         content:
-          "Sala compartilhada de código JavaScript. Múltiplos alunos digitam e executam ao mesmo tempo.",
+          "Ensine programação com um editor de código ao vivo. Alunos e instrutor digitam no mesmo espaço e veem execuções em tempo real.",
       },
     ],
   }),
