@@ -1018,7 +1018,22 @@ function RoomPage() {
         </div>
       </header>
 
+      {editingList.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 border-b bg-muted/30 px-4 py-1.5 text-xs">
+          <Pencil className="h-3 w-3 text-muted-foreground" />
+          {editingList.map((info) => (
+            <span key={info.id} className="inline-flex items-center gap-1.5 rounded-full border bg-background px-2 py-0.5">
+              <span className="h-2 w-2 rounded-full" style={{ backgroundColor: info.color }} />
+              <strong className="font-medium">{info.name}</strong>
+              <span className="text-muted-foreground">está editando</span>
+              <code className="font-mono text-[11px]">{info.path}</code>
+            </span>
+          ))}
+        </div>
+      )}
+
       <main className="flex flex-1 flex-col lg:flex-row">
+
         <section className="flex min-h-[50vh] flex-1 flex-col border-b lg:border-b-0 lg:border-r">
           <div className="flex items-center gap-0 overflow-x-auto border-b bg-muted/40 text-xs">
             {orderedPaths.map((path) => (
