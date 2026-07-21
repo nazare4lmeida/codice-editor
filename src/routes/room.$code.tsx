@@ -62,6 +62,8 @@ function RoomPage() {
   const [outputs, setOutputs] = useState<OutputItem[]>([]);
   const [copied, setCopied] = useState(false);
   const [running, setRunning] = useState(false);
+  const [activeTab, setActiveTab] = useState<"console" | "preview">("console");
+  const [previewVersion, setPreviewVersion] = useState(0);
 
   const me = useMemo<Participant>(() => {
     const id = randomId();
