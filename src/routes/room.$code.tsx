@@ -102,6 +102,21 @@ interface ChatMsg {
   at: number;
 }
 
+interface EditingInfo {
+  name: string;
+  color: string;
+  path: string;
+  at: number;
+}
+
+  id: string;
+  authorId: string;
+  authorName: string;
+  authorColor: string;
+  text: string;
+  at: number;
+}
+
 interface Diagnostic {
   file: string;
   line?: number;
