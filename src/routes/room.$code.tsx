@@ -228,14 +228,18 @@ function RoomPage() {
   }, [files]);
 
   const persistFiles = useCallback(
-    (f: Files) =>
-      supabase
+    async (f: Files) => {
+      const { error } = await supabase
         .from("rooms")
         .update({
           content: JSON.stringify(f),
           updated_at: new Date().toISOString(),
         })
-        .eq("code", code),
+        .eq("code", code);
+      if (error) {
+        console.error("Não foi possível salvar a sala", error.message);
+      }
+    },
     [code],
   );
 
