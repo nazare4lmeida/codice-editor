@@ -125,21 +125,7 @@ function Landing() {
               className="mt-2 w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
             />
 
-            <button
-              onClick={createRoom}
-              disabled={loading}
-              className="mt-6 w-full rounded-md bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-60"
-            >
-              {loading ? "Criando…" : "Criar nova sala"}
-            </button>
-
-            <div className="my-6 flex items-center gap-3 text-xs uppercase tracking-wider text-muted-foreground">
-              <div className="h-px flex-1 bg-border" />
-              ou
-              <div className="h-px flex-1 bg-border" />
-            </div>
-
-            <form onSubmit={joinRoom} className="space-y-2">
+            <form onSubmit={joinRoom} className="mt-5 space-y-2">
               <label className="text-sm font-medium">Entrar em uma sala</label>
               <div className="flex gap-2">
                 <input
@@ -157,6 +143,20 @@ function Landing() {
                 </button>
               </div>
             </form>
+
+            <div className="my-6 flex items-center gap-3 text-xs uppercase tracking-wider text-muted-foreground">
+              <div className="h-px flex-1 bg-border" />
+              ou
+              <div className="h-px flex-1 bg-border" />
+            </div>
+
+            <button
+              onClick={createRoom}
+              disabled={loading}
+              className="w-full rounded-md bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-60"
+            >
+              {loading ? "Criando…" : "Criar nova sala"}
+            </button>
 
             {error && (
               <p className="mt-4 text-sm text-destructive">{error}</p>
