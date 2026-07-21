@@ -494,13 +494,34 @@ function RoomPage() {
       writeDraftCache(code, normalized, nextActivePath);
       setSaveState("saving");
       if (persistTimer.current) clearTimeout(persistTimer.current);
+      // Debounce DB writes: with 30+ users typing, saving on every keystroke
+      // would hammer the backend. 800ms gives smooth UX and cuts writes ~40x.
       persistTimer.current = setTimeout(() => {
         persistTimer.current = null;
         void saveProject(filesRef.current, activePathRef.current);
-      }, 120);
-      void saveProject(normalized, nextActivePath);
+      }, 800);
     },
     [code, saveProject],
+  );
+
+  const updateLocalFilesFromRemote = useCallback(
+    (mutator: (prev: ProjectFiles) => { next: ProjectFiles; nextActive?: string }) => {
+      // Remote patches update local state + cache only — the ORIGINATING peer
+      // is responsible for persisting to the DB. This prevents every user from
+      // firing a save on every remote keystroke (N² writes with N users).
+      setFiles((prev) => {
+        const { next, nextActive } = mutator(prev);
+        const normalized = normalizeFiles(next);
+        filesRef.current = normalized;
+        if (nextActive) {
+          activePathRef.current = nextActive;
+          setActivePath(nextActive);
+        }
+        writeDraftCache(code, normalized, activePathRef.current);
+        return normalized;
+      });
+    },
+    [code],
   );
 
   const persistNow = useCallback(() => {
