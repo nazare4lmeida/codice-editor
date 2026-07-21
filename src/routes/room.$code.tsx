@@ -2,7 +2,7 @@ import { createFileRoute, Link, useParams } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { RealtimeChannel } from "@supabase/supabase-js";
-import { ArrowLeft, Copy, Play, Trash2, Users } from "lucide-react";
+import { ArrowLeft, Copy, Eye, Layout, Play, Terminal, Trash2, Users } from "lucide-react";
 
 export const Route = createFileRoute("/room/$code")({
   head: ({ params }) => ({
