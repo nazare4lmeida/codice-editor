@@ -663,13 +663,7 @@ function RoomPage() {
           <div className="relative flex-1">
             <textarea
               value={currentValue}
-              onChange={(e) => {
-                if (remoteApplying.current) {
-                  remoteApplying.current = false;
-                  return;
-                }
-                updateFile(activeFile, e.target.value);
-              }}
+              onChange={(e) => updateFile(activeFile, e.target.value)}
               spellCheck={false}
               className="absolute inset-0 h-full w-full resize-none border-0 bg-background p-4 font-mono text-sm leading-6 outline-none"
               placeholder={`// ${activeFile === "html" ? "HTML" : activeFile === "css" ? "CSS" : "JavaScript"}…`}
