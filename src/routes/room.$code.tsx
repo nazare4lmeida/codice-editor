@@ -961,6 +961,10 @@ function RoomPage() {
   }
 
   const saveText = saveState === "saving" ? "Salvando" : saveState === "error" ? "Erro ao salvar" : "Salvo";
+  const editingList = useMemo(
+    () => Object.entries(editing).map(([id, info]) => ({ id, ...info })),
+    [editing],
+  );
 
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
