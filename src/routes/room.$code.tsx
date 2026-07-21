@@ -296,29 +296,31 @@ function RoomPage() {
     if (sidePanel === "chat") setUnreadChat(0);
   }, [chat, sidePanel]);
 
-  // Broadcast changes + debounce persist
+  // Broadcast per-file changes + debounce persist
   const updateFile = useCallback(
     (key: FileKey, value: string) => {
       setFiles((prev) => {
+        if (prev[key] === value) return prev;
         const next = { ...prev, [key]: value };
         const channel = channelRef.current;
         if (channel) {
           channel.send({
             type: "broadcast",
-            event: "files",
-            payload: { files: next, from: me.id },
+            event: "file",
+            payload: { file: key, value, from: me.id },
           });
         }
         if (persistTimer.current) clearTimeout(persistTimer.current);
         persistTimer.current = setTimeout(() => {
-          supabase
+          persistTimer.current = null;
+          void supabase
             .from("rooms")
             .update({
               content: JSON.stringify(next),
               updated_at: new Date().toISOString(),
             })
             .eq("code", code);
-        }, 800);
+        }, 600);
         return next;
       });
     },
