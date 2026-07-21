@@ -19,6 +19,7 @@ import {
   Users,
   X,
   XCircle,
+  Pencil,
 } from "lucide-react";
 
 export const Route = createFileRoute("/room/$code")({
@@ -98,6 +99,13 @@ interface ChatMsg {
   authorName: string;
   authorColor: string;
   text: string;
+  at: number;
+}
+
+interface EditingInfo {
+  name: string;
+  color: string;
+  path: string;
   at: number;
 }
 
@@ -405,6 +413,7 @@ function RoomPage() {
   const [unreadChat, setUnreadChat] = useState(0);
   const [addingFile, setAddingFile] = useState(false);
   const [newFileName, setNewFileName] = useState("");
+  const [editing, setEditing] = useState<Record<string, EditingInfo>>({});
 
   const me = useMemo<Participant>(() => {
     const id = randomId();
@@ -422,6 +431,8 @@ function RoomPage() {
   const lastSavedPayloadRef = useRef("");
   const loadedRef = useRef(false);
   const dirtyRef = useRef(false);
+  const lastEditingSentAtRef = useRef(0);
+  const editingCleanupRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const orderedPaths = useMemo(() => sortFiles(files), [files]);
   const currentValue = files[activePath] ?? "";
@@ -483,13 +494,34 @@ function RoomPage() {
       writeDraftCache(code, normalized, nextActivePath);
       setSaveState("saving");
       if (persistTimer.current) clearTimeout(persistTimer.current);
+      // Debounce DB writes: with 30+ users typing, saving on every keystroke
+      // would hammer the backend. 800ms gives smooth UX and cuts writes ~40x.
       persistTimer.current = setTimeout(() => {
         persistTimer.current = null;
         void saveProject(filesRef.current, activePathRef.current);
-      }, 120);
-      void saveProject(normalized, nextActivePath);
+      }, 800);
     },
     [code, saveProject],
+  );
+
+  const updateLocalFilesFromRemote = useCallback(
+    (mutator: (prev: ProjectFiles) => { next: ProjectFiles; nextActive?: string }) => {
+      // Remote patches update local state + cache only — the ORIGINATING peer
+      // is responsible for persisting to the DB. This prevents every user from
+      // firing a save on every remote keystroke (N² writes with N users).
+      setFiles((prev) => {
+        const { next, nextActive } = mutator(prev);
+        const normalized = normalizeFiles(next);
+        filesRef.current = normalized;
+        if (nextActive) {
+          activePathRef.current = nextActive;
+          setActivePath(nextActive);
+        }
+        writeDraftCache(code, normalized, activePathRef.current);
+        return normalized;
+      });
+    },
+    [code],
   );
 
   const persistNow = useCallback(() => {
@@ -566,19 +598,30 @@ function RoomPage() {
       .on("presence", { event: "sync" }, () => {
         const state = channel.presenceState<Participant>();
         const list: Participant[] = [];
+        const alive = new Set<string>();
         Object.values(state).forEach((entries) => {
-          entries.forEach((entry) => list.push(entry as Participant));
+          entries.forEach((entry) => {
+            const p = entry as Participant;
+            list.push(p);
+            alive.add(p.id);
+          });
         });
         setParticipants(list);
+        // Drop editing indicators for users who left the room.
+        setEditing((prev) => {
+          const next: Record<string, EditingInfo> = {};
+          for (const [id, info] of Object.entries(prev)) if (alive.has(id)) next[id] = info;
+          return next;
+        });
       })
       .on("broadcast", { event: "file_patch" }, (payload) => {
         const p = payload.payload as
-          | { path?: string; content?: string; deleted?: boolean; from?: string; activePath?: string }
+          | { path?: string; content?: string; deleted?: boolean; from?: string }
           | undefined;
         if (!p || p.from === me.id || !p.path) return;
         const path = cleanPath(p.path);
         if (!path) return;
-        setFiles((prev) => {
+        updateLocalFilesFromRemote((prev) => {
           const next = { ...prev };
           if (p.deleted) delete next[path];
           else next[path] = typeof p.content === "string" ? p.content : "";
@@ -586,11 +629,17 @@ function RoomPage() {
           const nextActive =
             p.deleted && activePathRef.current === path
               ? sortFiles(normalized)[0]
-              : activePathRef.current;
-          if (nextActive !== activePathRef.current) setActivePath(nextActive);
-          schedulePersist(normalized, nextActive);
-          return normalized;
+              : undefined;
+          return { next: normalized, nextActive };
         });
+      })
+      .on("broadcast", { event: "editing" }, (payload) => {
+        const p = payload.payload as { from?: string; name?: string; color?: string; path?: string } | undefined;
+        if (!p || !p.from || p.from === me.id || !p.path) return;
+        setEditing((prev) => ({
+          ...prev,
+          [p.from!]: { name: p.name || "Alguém", color: p.color || "#3b82f6", path: p.path!, at: Date.now() },
+        }));
       })
       .on("broadcast", { event: "chat" }, (payload) => {
         const msg = payload.payload as ChatMsg;
@@ -605,11 +654,27 @@ function RoomPage() {
       });
 
     channelRef.current = channel;
+    // Expire editing indicators that haven't refreshed in 4s.
+    editingCleanupRef.current = setInterval(() => {
+      const cutoff = Date.now() - 4000;
+      setEditing((prev) => {
+        let changed = false;
+        const next: Record<string, EditingInfo> = {};
+        for (const [id, info] of Object.entries(prev)) {
+          if (info.at >= cutoff) next[id] = info;
+          else changed = true;
+        }
+        return changed ? next : prev;
+      });
+    }, 1500);
     return () => {
       supabase.removeChannel(channel);
       channelRef.current = null;
+      if (editingCleanupRef.current) clearInterval(editingCleanupRef.current);
+      editingCleanupRef.current = null;
     };
-  }, [loaded, code, me, schedulePersist]);
+  }, [loaded, code, me, updateLocalFilesFromRemote]);
+
 
   useEffect(() => {
     if (sidePanel === "chat" && chatScrollRef.current) {
@@ -645,6 +710,19 @@ function RoomPage() {
     });
   }
 
+  function broadcastEditing(path: string) {
+    // Throttle to at most 1 msg / 1.2s per user: 30 students typing = ~25 msgs/s
+    // per room instead of 300+.
+    const now = Date.now();
+    if (now - lastEditingSentAtRef.current < 1200) return;
+    lastEditingSentAtRef.current = now;
+    channelRef.current?.send({
+      type: "broadcast",
+      event: "editing",
+      payload: { from: me.id, name: me.name, color: me.color, path },
+    });
+  }
+
   function updateFile(path: string, value: string) {
     if (!loadedRef.current) return;
     setFiles((prev) => {
@@ -652,9 +730,11 @@ function RoomPage() {
       const next = normalizeFiles({ ...prev, [path]: value });
       schedulePersist(next, activePathRef.current);
       broadcastPatch(path, value);
+      broadcastEditing(path);
       return next;
     });
   }
+
 
   function createFile(name: string) {
     if (!loadedRef.current) return;
@@ -881,6 +961,10 @@ function RoomPage() {
   }
 
   const saveText = saveState === "saving" ? "Salvando" : saveState === "error" ? "Erro ao salvar" : "Salvo";
+  const editingList = useMemo(
+    () => Object.entries(editing).map(([id, info]) => ({ id, ...info })),
+    [editing],
+  );
 
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
@@ -934,7 +1018,22 @@ function RoomPage() {
         </div>
       </header>
 
+      {editingList.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 border-b bg-muted/30 px-4 py-1.5 text-xs">
+          <Pencil className="h-3 w-3 text-muted-foreground" />
+          {editingList.map((info) => (
+            <span key={info.id} className="inline-flex items-center gap-1.5 rounded-full border bg-background px-2 py-0.5">
+              <span className="h-2 w-2 rounded-full" style={{ backgroundColor: info.color }} />
+              <strong className="font-medium">{info.name}</strong>
+              <span className="text-muted-foreground">está editando</span>
+              <code className="font-mono text-[11px]">{info.path}</code>
+            </span>
+          ))}
+        </div>
+      )}
+
       <main className="flex flex-1 flex-col lg:flex-row">
+
         <section className="flex min-h-[50vh] flex-1 flex-col border-b lg:border-b-0 lg:border-r">
           <div className="flex items-center gap-0 overflow-x-auto border-b bg-muted/40 text-xs">
             {orderedPaths.map((path) => (
