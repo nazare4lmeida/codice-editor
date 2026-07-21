@@ -2,7 +2,22 @@ import { createFileRoute, Link, useParams } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { RealtimeChannel } from "@supabase/supabase-js";
-import { ArrowLeft, Copy, Eye, Layout, Play, Terminal, Trash2, Users } from "lucide-react";
+import {
+  ArrowLeft,
+  CheckCircle2,
+  Copy,
+  Eye,
+  FileCode,
+  Layout,
+  MessageSquare,
+  Play,
+  Send,
+  Terminal,
+  Trash2,
+  Users,
+  X,
+  XCircle,
+} from "lucide-react";
 
 export const Route = createFileRoute("/room/$code")({
   head: ({ params }) => ({
@@ -10,7 +25,7 @@ export const Route = createFileRoute("/room/$code")({
       { title: `Sala ${params.code} — CodeLive` },
       {
         name: "description",
-        content: "Editor JavaScript colaborativo ao vivo para aulas.",
+        content: "Editor colaborativo ao vivo para aulas.",
       },
       { name: "robots", content: "noindex" },
     ],
@@ -29,19 +44,67 @@ const COLORS = [
   "#f97316",
 ];
 
+type FileKey = "html" | "css" | "js";
+
+interface Files {
+  html: string;
+  css: string;
+  js: string;
+}
+
+const DEFAULT_FILES: Files = {
+  html: `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <h1 id="title">Olá turma!</h1>
+    <button id="btn">Clique aqui</button>
+    <script src="script.js"></script>
+  </body>
+</html>`,
+  css: `body {
+  font-family: system-ui, sans-serif;
+  padding: 2rem;
+  background: #0f172a;
+  color: #f8fafc;
+}
+button {
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  border: 0;
+  background: #3b82f6;
+  color: white;
+  cursor: pointer;
+}`,
+  js: `document.getElementById('btn').addEventListener('click', () => {
+  document.getElementById('title').textContent = 'Você clicou!';
+  console.log('Botão clicado');
+});`,
+};
+
 interface Participant {
   id: string;
   name: string;
   color: string;
 }
 
-interface OutputItem {
+interface ChatMsg {
   id: string;
+  authorId: string;
   authorName: string;
   authorColor: string;
-  entries: { level: "log" | "error" | "warn" | "info"; parts: string[] }[];
-  error?: string;
+  text: string;
   at: number;
+}
+
+interface Diagnostic {
+  file: FileKey;
+  line?: number;
+  message: string;
+  hint?: string;
 }
 
 function randomId() {
@@ -54,16 +117,52 @@ function pickColor(id: string) {
   return COLORS[sum % COLORS.length];
 }
 
+function parseStoredContent(raw: string | null | undefined): Files {
+  if (!raw) return { ...DEFAULT_FILES };
+  try {
+    const parsed = JSON.parse(raw);
+    if (
+      parsed &&
+      typeof parsed === "object" &&
+      typeof parsed.html === "string" &&
+      typeof parsed.css === "string" &&
+      typeof parsed.js === "string"
+    ) {
+      return { html: parsed.html, css: parsed.css, js: parsed.js };
+    }
+  } catch {
+    // legacy string content
+  }
+  // Legacy: single blob of text. Detect html vs js.
+  const trimmed = raw.trim().toLowerCase();
+  const looksHtml =
+    trimmed.startsWith("<") ||
+    /^<!doctype\shtml/.test(trimmed) ||
+    /<html|<head|<body|<div|<h[1-6]|<script|<style/i.test(trimmed.slice(0, 400));
+  if (looksHtml) return { html: raw, css: "", js: "" };
+  return { html: DEFAULT_FILES.html, css: DEFAULT_FILES.css, js: raw };
+}
+
 function RoomPage() {
   const { code } = useParams({ from: "/room/$code" });
-  const [content, setContent] = useState<string>("");
+  const [files, setFiles] = useState<Files>(DEFAULT_FILES);
+  const [activeFile, setActiveFile] = useState<FileKey>("html");
   const [loaded, setLoaded] = useState(false);
   const [participants, setParticipants] = useState<Participant[]>([]);
-  const [outputs, setOutputs] = useState<OutputItem[]>([]);
   const [copied, setCopied] = useState(false);
   const [running, setRunning] = useState(false);
-  const [activeTab, setActiveTab] = useState<"console" | "preview">("console");
+  const [activeTab, setActiveTab] = useState<"validate" | "preview" | "console">(
+    "preview",
+  );
   const [previewSrcDoc, setPreviewSrcDoc] = useState<string>("");
+  const [diagnostics, setDiagnostics] = useState<Diagnostic[] | null>(null);
+  const [consoleEntries, setConsoleEntries] = useState<
+    { level: "log" | "error" | "warn" | "info"; parts: string[]; at: number }[]
+  >([]);
+  const [sidePanel, setSidePanel] = useState<"none" | "people" | "chat">("none");
+  const [chat, setChat] = useState<ChatMsg[]>([]);
+  const [chatDraft, setChatDraft] = useState("");
+  const [unreadChat, setUnreadChat] = useState(0);
 
   const me = useMemo<Participant>(() => {
     const id = randomId();
@@ -75,12 +174,10 @@ function RoomPage() {
   }, []);
 
   const channelRef = useRef<RealtimeChannel | null>(null);
-  const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const previewRef = useRef<HTMLIFrameElement | null>(null);
-  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const persistTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const remoteApplying = useRef(false);
-  const pendingRunId = useRef<string | null>(null);
+  const chatScrollRef = useRef<HTMLDivElement | null>(null);
 
   // Load initial content
   useEffect(() => {
@@ -92,7 +189,7 @@ function RoomPage() {
         .eq("code", code)
         .maybeSingle();
       if (!cancelled) {
-        setContent(data?.content ?? "");
+        setFiles(parseStoredContent(data?.content));
         setLoaded(true);
       }
     })();
@@ -117,18 +214,26 @@ function RoomPage() {
         });
         setParticipants(list);
       })
-      .on("broadcast", { event: "code" }, (payload) => {
-        const next = payload.payload?.content as string | undefined;
-        if (typeof next === "string") {
+      .on("broadcast", { event: "files" }, (payload) => {
+        const next = payload.payload?.files as Files | undefined;
+        if (
+          next &&
+          typeof next.html === "string" &&
+          typeof next.css === "string" &&
+          typeof next.js === "string"
+        ) {
           remoteApplying.current = true;
-          setContent(next);
+          setFiles(next);
         }
       })
-      .on("broadcast", { event: "output" }, (payload) => {
-        const item = payload.payload as OutputItem;
-        setOutputs((prev) => [item, ...prev].slice(0, 50));
+      .on("broadcast", { event: "chat" }, (payload) => {
+        const msg = payload.payload as ChatMsg;
+        setChat((prev) => [...prev, msg].slice(-200));
+        setSidePanel((cur) => {
+          if (cur !== "chat") setUnreadChat((u) => u + 1);
+          return cur;
+        });
       })
-      .on("broadcast", { event: "clear" }, () => setOutputs([]))
       .subscribe(async (status) => {
         if (status === "SUBSCRIBED") {
           await channel.track(me);
@@ -142,91 +247,233 @@ function RoomPage() {
     };
   }, [loaded, code, me]);
 
-  // Broadcast content changes + debounce persist
-  const onLocalChange = useCallback(
-    (next: string) => {
-      setContent(next);
-      const channel = channelRef.current;
-      if (channel) {
-        channel.send({
-          type: "broadcast",
-          event: "code",
-          payload: { content: next, from: me.id },
-        });
-      }
-      if (persistTimer.current) clearTimeout(persistTimer.current);
-      persistTimer.current = setTimeout(() => {
-        supabase
-          .from("rooms")
-          .update({ content: next, updated_at: new Date().toISOString() })
-          .eq("code", code);
-      }, 800);
+  // Auto-scroll chat
+  useEffect(() => {
+    if (sidePanel === "chat" && chatScrollRef.current) {
+      chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
+    }
+    if (sidePanel === "chat") setUnreadChat(0);
+  }, [chat, sidePanel]);
+
+  // Broadcast changes + debounce persist
+  const updateFile = useCallback(
+    (key: FileKey, value: string) => {
+      setFiles((prev) => {
+        const next = { ...prev, [key]: value };
+        const channel = channelRef.current;
+        if (channel) {
+          channel.send({
+            type: "broadcast",
+            event: "files",
+            payload: { files: next, from: me.id },
+          });
+        }
+        if (persistTimer.current) clearTimeout(persistTimer.current);
+        persistTimer.current = setTimeout(() => {
+          supabase
+            .from("rooms")
+            .update({
+              content: JSON.stringify(next),
+              updated_at: new Date().toISOString(),
+            })
+            .eq("code", code);
+        }, 800);
+        return next;
+      });
     },
     [code, me.id],
   );
 
-  // Listen for iframe run results
+  // Combine files into a single HTML doc with inline <style> and <script>
+  const buildPreviewHtml = useCallback(
+    (f: Files, captureConsole: boolean) => {
+      // Inject CSS into <head>, JS into <body>. Also inject a console-capture
+      // bridge that forwards logs back to the parent.
+      const styleTag = f.css ? `<style>\n${f.css}\n</style>` : "";
+      const consoleBridge = captureConsole
+        ? `<script>(function(){
+  function s(v){if(v===undefined)return 'undefined';if(v===null)return 'null';if(typeof v==='string')return v;if(typeof v==='function')return v.toString();try{return JSON.stringify(v,function(k,val){if(typeof val==='function')return '[Function]';return val;},2);}catch(e){return String(v);}}
+  var o={log:console.log,error:console.error,warn:console.warn,info:console.info};
+  ['log','error','warn','info'].forEach(function(l){console[l]=function(){var p=[];for(var i=0;i<arguments.length;i++)p.push(s(arguments[i]));parent.postMessage({__codelive:true,type:'log',level:l,parts:p},'*');try{o[l].apply(console,arguments);}catch(e){}};});
+  window.addEventListener('error',function(e){parent.postMessage({__codelive:true,type:'log',level:'error',parts:[String(e.message)+ ' (linha '+e.lineno+')']},'*');});
+  window.addEventListener('unhandledrejection',function(e){parent.postMessage({__codelive:true,type:'log',level:'error',parts:[String(e.reason && e.reason.stack || e.reason)]},'*');});
+})();<\/script>`
+        : "";
+
+      const scriptTag = f.js
+        ? `<script>\ntry{\n${f.js}\n}catch(e){console.error(e && e.stack || e);}\n<\/script>`
+        : "";
+
+      let html = f.html || "";
+      const hasHtmlTag = /<html[\s>]/i.test(html);
+      if (!hasHtmlTag) {
+        html = `<!doctype html><html><head><meta charset="utf-8"></head><body>${html}</body></html>`;
+      }
+
+      // Insert consoleBridge + styles before </head>, script before </body>.
+      if (/<\/head>/i.test(html)) {
+        html = html.replace(/<\/head>/i, `${consoleBridge}${styleTag}</head>`);
+      } else {
+        html = html.replace(
+          /<html[^>]*>/i,
+          (m) => `${m}<head>${consoleBridge}${styleTag}</head>`,
+        );
+      }
+      if (/<\/body>/i.test(html)) {
+        html = html.replace(/<\/body>/i, `${scriptTag}</body>`);
+      } else {
+        html = html + scriptTag;
+      }
+      return html;
+    },
+    [],
+  );
+
+  // Validation: checks JS syntax with new Function, catches basic HTML/CSS issues.
+  const validate = useCallback((f: Files): Diagnostic[] => {
+    const diags: Diagnostic[] = [];
+
+    // JS syntax check
+    if (f.js.trim()) {
+      try {
+        // eslint-disable-next-line no-new-func
+        new Function(f.js);
+      } catch (e) {
+        const err = e as Error;
+        const msg = err.message;
+        // Try to pull line number from V8/Firefox error messages.
+        const lineMatch = /line\s*(\d+)|:(\d+):\d+/i.exec(err.stack || "");
+        diags.push({
+          file: "js",
+          line: lineMatch ? Number(lineMatch[1] || lineMatch[2]) : undefined,
+          message: msg,
+          hint: suggestJsFix(msg),
+        });
+      }
+    }
+
+    // HTML: unclosed tag heuristic
+    if (f.html.trim()) {
+      const openTags: { name: string; line: number }[] = [];
+      const voidTags = new Set([
+        "area","base","br","col","embed","hr","img","input","link","meta","param","source","track","wbr",
+      ]);
+      const tagRe = /<\/?([a-zA-Z][a-zA-Z0-9]*)(\s[^>]*)?>/g;
+      let m: RegExpExecArray | null;
+      const lines = f.html.split("\n");
+      const offsetToLine = (idx: number) => {
+        let acc = 0;
+        for (let i = 0; i < lines.length; i++) {
+          acc += lines[i].length + 1;
+          if (idx < acc) return i + 1;
+        }
+        return lines.length;
+      };
+      while ((m = tagRe.exec(f.html))) {
+        const raw = m[0];
+        const name = m[1].toLowerCase();
+        const line = offsetToLine(m.index);
+        if (raw.startsWith("</")) {
+          const last = openTags.pop();
+          if (!last || last.name !== name) {
+            diags.push({
+              file: "html",
+              line,
+              message: `Tag de fechamento inesperada </${name}>${last ? ` — esperava </${last.name}>` : ""}`,
+              hint: last
+                ? `Feche primeiro a tag <${last.name}> aberta na linha ${last.line}.`
+                : "Remova esta tag de fechamento ou abra a correspondente antes.",
+            });
+          }
+        } else if (!voidTags.has(name) && !raw.endsWith("/>")) {
+          openTags.push({ name, line });
+        }
+      }
+      for (const t of openTags) {
+        diags.push({
+          file: "html",
+          line: t.line,
+          message: `Tag <${t.name}> não foi fechada`,
+          hint: `Adicione </${t.name}> no local apropriado.`,
+        });
+      }
+    }
+
+    // CSS: unbalanced braces
+    if (f.css.trim()) {
+      let depth = 0;
+      let line = 1;
+      for (let i = 0; i < f.css.length; i++) {
+        const c = f.css[i];
+        if (c === "\n") line++;
+        else if (c === "{") depth++;
+        else if (c === "}") {
+          depth--;
+          if (depth < 0) {
+            diags.push({
+              file: "css",
+              line,
+              message: "Chave '}' sem '{' correspondente",
+              hint: "Remova esta '}' ou adicione uma '{' antes.",
+            });
+            depth = 0;
+          }
+        }
+      }
+      if (depth > 0) {
+        diags.push({
+          file: "css",
+          message: `${depth} chave(s) '{' não fechada(s)`,
+          hint: "Adicione '}' correspondente(s) no fim das regras.",
+        });
+      }
+    }
+
+    return diags;
+  }, []);
+
+  // Listen for iframe console logs
   useEffect(() => {
     function onMessage(ev: MessageEvent) {
       const data = ev.data;
       if (!data || data.__codelive !== true) return;
-      if (data.type === "result" && data.runId === pendingRunId.current) {
-        const item: OutputItem = {
-          id: randomId(),
-          authorName: me.name,
-          authorColor: me.color,
-          entries: data.entries || [],
-          error: data.error,
-          at: Date.now(),
-        };
-        setOutputs((prev) => [item, ...prev].slice(0, 50));
-        channelRef.current?.send({
-          type: "broadcast",
-          event: "output",
-          payload: item,
-        });
-        setRunning(false);
-        pendingRunId.current = null;
+      if (data.type === "log") {
+        setConsoleEntries((prev) =>
+          [
+            ...prev,
+            {
+              level: data.level,
+              parts: data.parts || [],
+              at: Date.now(),
+            },
+          ].slice(-100),
+        );
       }
     }
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, [me]);
+  }, []);
 
-  function runCode() {
-    // If the code looks like HTML, route it to the Preview tab instead of
-    // trying to eval it as JavaScript (which would throw a SyntaxError).
-    if (looksLikeHtml(content)) {
-      setActiveTab("preview");
-      setPreviewSrcDoc(buildPreviewHtml(content));
-      return;
-    }
-    const iframe = iframeRef.current;
-    if (!iframe?.contentWindow) return;
+  function runValidate() {
     setRunning(true);
-    const runId = randomId();
-    pendingRunId.current = runId;
-    iframe.contentWindow.postMessage(
-      { __codelive: true, type: "run", runId, code: content },
-      "*",
-    );
-    // Safety timeout
-    setTimeout(() => {
-      if (pendingRunId.current === runId) {
-        setRunning(false);
-        pendingRunId.current = null;
-      }
-    }, 5000);
+    const diags = validate(files);
+    setDiagnostics(diags);
+    setActiveTab("validate");
+    setTimeout(() => setRunning(false), 200);
   }
 
-  function clearOutputs() {
-    setOutputs([]);
-    channelRef.current?.send({
-      type: "broadcast",
-      event: "clear",
-      payload: {},
-    });
+  function refreshPreview() {
+    setConsoleEntries([]);
+    setPreviewSrcDoc(buildPreviewHtml(files, true));
+    setActiveTab("preview");
   }
+
+  useEffect(() => {
+    if (activeTab === "preview" && !previewSrcDoc && loaded) {
+      setPreviewSrcDoc(buildPreviewHtml(files, true));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, loaded]);
 
   function copyLink() {
     const url = `${window.location.origin}/room/${code}`;
@@ -235,93 +482,30 @@ function RoomPage() {
     setTimeout(() => setCopied(false), 1500);
   }
 
-  function looksLikeHtml(code: string) {
-    const trimmed = code.trim().toLowerCase();
-    return (
-      trimmed.startsWith("<") ||
-      /^<!doctype\shtml/.test(trimmed) ||
-      /<html|head|body|div|span|h[1-6]|p|button|input|form|section|header|footer/i.test(
-        trimmed.slice(0, 200),
-      )
-    );
-  }
-
-  function buildPreviewHtml(code: string) {
-    if (looksLikeHtml(code)) {
-      return code;
-    }
-    return `<!doctype html>
-<html><head><meta charset="utf-8"><style>body{font-family:system-ui,sans-serif;padding:1rem;line-height:1.5}</style></head><body>
-<script>
-(function(){
-  function stringify(v){
-    if (v === undefined) return 'undefined';
-    if (v === null) return 'null';
-    if (typeof v === 'string') return v;
-    if (typeof v === 'function') return v.toString();
-    try { return JSON.stringify(v, function(k, val){
-      if (typeof val === 'function') return '[Function ' + (val.name||'anonymous') + ']';
-      if (typeof val === 'undefined') return 'undefined';
-      return val;
-    }, 2); } catch(e) { return String(v); }
-  }
-  var original = { log: console.log, error: console.error, warn: console.warn, info: console.info };
-  ['log','error','warn','info'].forEach(function(level){
-    console[level] = function(){
-      var el = document.createElement('div');
-      el.style.cssText = 'white-space:pre-wrap;font-family:monospace;font-size:12px;margin:2px 0;padding:2px 0;border-bottom:1px solid #eee';
-      var parts = [];
-      for (var i=0;i<arguments.length;i++) parts.push(stringify(arguments[i]));
-      el.textContent = parts.join(' ');
-      document.body.appendChild(el);
-      try { original[level].apply(console, arguments); } catch(e){}
+  function sendChat(e: React.FormEvent) {
+    e.preventDefault();
+    const text = chatDraft.trim();
+    if (!text) return;
+    const msg: ChatMsg = {
+      id: randomId(),
+      authorId: me.id,
+      authorName: me.name,
+      authorColor: me.color,
+      text,
+      at: Date.now(),
     };
-  });
-  window.onerror = function(msg, url, line, col, err){
-    var el = document.createElement('div');
-    el.style.cssText = 'color:#ef4444;white-space:pre-wrap;font-family:monospace;font-size:12px;margin:2px 0';
-    el.textContent = '⚠ ' + (err && err.stack || msg);
-    document.body.appendChild(el);
-  };
-  try {
-    var runner = new Function('"use strict"; return (async () => { ' + code + '\\n })();');
-    Promise.resolve(runner()).catch(function(e){
-      var el = document.createElement('div');
-      el.style.cssText = 'color:#ef4444;white-space:pre-wrap;font-family:monospace;font-size:12px;margin:2px 0';
-      el.textContent = '⚠ ' + (e && e.stack || e);
-      document.body.appendChild(el);
+    setChat((prev) => [...prev, msg].slice(-200));
+    channelRef.current?.send({
+      type: "broadcast",
+      event: "chat",
+      payload: msg,
     });
-  } catch(e) {
-    var el = document.createElement('div');
-    el.style.cssText = 'color:#ef4444;white-space:pre-wrap;font-family:monospace;font-size:12px;margin:2px 0';
-    el.textContent = '⚠ ' + (e && e.stack || e);
-    document.body.appendChild(el);
-  }
-})();
-</script>
-</body></html>`;
+    setChatDraft("");
   }
 
-  const refreshPreview = useCallback(() => {
-    setPreviewSrcDoc(buildPreviewHtml(content));
-  }, [content]);
-
-  useEffect(() => {
-    if (activeTab === "preview" && !previewSrcDoc) {
-      setPreviewSrcDoc(buildPreviewHtml(content));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab]);
-
-  // Handle Ctrl/Cmd + Enter
-  function onKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
-      e.preventDefault();
-      runCode();
-    }
-  }
-
-  const lineCount = content.split("\n").length;
+  const currentValue = files[activeFile];
+  const lineCount = currentValue.split("\n").length;
+  const errorCount = diagnostics?.length ?? 0;
 
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
@@ -349,36 +533,64 @@ function RoomPage() {
           </button>
         </div>
 
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 rounded-md border bg-background px-3 py-1.5">
-            <Users className="h-4 w-4 text-muted-foreground" />
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() =>
+              setSidePanel((p) => (p === "people" ? "none" : "people"))
+            }
+            className={`inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs font-medium hover:bg-accent ${
+              sidePanel === "people" ? "bg-accent" : ""
+            }`}
+          >
+            <Users className="h-4 w-4" />
             <div className="flex -space-x-2">
-              {participants.slice(0, 6).map((p) => (
+              {participants.slice(0, 4).map((p) => (
                 <div
                   key={p.id}
                   title={p.name}
-                  className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-card text-[10px] font-semibold text-white"
+                  className="flex h-5 w-5 items-center justify-center rounded-full border-2 border-card text-[9px] font-semibold text-white"
                   style={{ backgroundColor: p.color }}
                 >
                   {p.name.charAt(0).toUpperCase()}
                 </div>
               ))}
             </div>
-            <span className="text-xs text-muted-foreground">
-              {participants.length}
-            </span>
-          </div>
+            <span>{participants.length}</span>
+          </button>
 
           <button
-            onClick={runCode}
+            onClick={() => {
+              setSidePanel((p) => (p === "chat" ? "none" : "chat"));
+              setUnreadChat(0);
+            }}
+            className={`relative inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs font-medium hover:bg-accent ${
+              sidePanel === "chat" ? "bg-accent" : ""
+            }`}
+          >
+            <MessageSquare className="h-4 w-4" />
+            Chat
+            {unreadChat > 0 && (
+              <span className="ml-1 rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold text-primary-foreground">
+                {unreadChat}
+              </span>
+            )}
+          </button>
+
+          <button
+            onClick={runValidate}
             disabled={running}
-            className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+            className="inline-flex items-center gap-2 rounded-md border bg-background px-3 py-1.5 text-sm font-medium hover:bg-accent disabled:opacity-60"
+          >
+            <CheckCircle2 className="h-4 w-4" />
+            Executar
+          </button>
+
+          <button
+            onClick={refreshPreview}
+            className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90"
           >
             <Play className="h-4 w-4" />
-            {running ? "Executando…" : "Executar"}
-            <kbd className="ml-1 hidden rounded bg-primary-foreground/20 px-1.5 py-0.5 text-[10px] font-normal sm:inline">
-              ⌘⏎
-            </kbd>
+            Preview
           </button>
         </div>
       </header>
@@ -386,186 +598,334 @@ function RoomPage() {
       <main className="flex flex-1 flex-col lg:flex-row">
         {/* Editor */}
         <section className="flex min-h-[50vh] flex-1 flex-col border-b lg:border-b-0 lg:border-r">
-          <div className="flex items-center justify-between border-b bg-muted/40 px-3 py-1.5 text-xs text-muted-foreground">
-            <span>editor.js</span>
-            <span>{lineCount} linhas · JavaScript</span>
+          <div className="flex items-center gap-0 border-b bg-muted/40 text-xs">
+            {(["html", "css", "js"] as FileKey[]).map((k) => (
+              <button
+                key={k}
+                onClick={() => setActiveFile(k)}
+                className={`inline-flex items-center gap-1.5 border-r px-3 py-2 ${
+                  activeFile === k
+                    ? "bg-background font-medium text-foreground"
+                    : "text-muted-foreground hover:bg-accent"
+                }`}
+              >
+                <FileCode className="h-3.5 w-3.5" />
+                {k === "html" ? "index.html" : k === "css" ? "styles.css" : "script.js"}
+              </button>
+            ))}
+            <div className="ml-auto px-3 py-2 text-muted-foreground">
+              {lineCount} linhas
+            </div>
           </div>
           <div className="relative flex-1">
             <textarea
-              ref={textareaRef}
-              value={content}
+              value={currentValue}
               onChange={(e) => {
                 if (remoteApplying.current) {
                   remoteApplying.current = false;
                   return;
                 }
-                onLocalChange(e.target.value);
+                updateFile(activeFile, e.target.value);
               }}
-              onKeyDown={onKeyDown}
               spellCheck={false}
               className="absolute inset-0 h-full w-full resize-none border-0 bg-background p-4 font-mono text-sm leading-6 outline-none"
-              placeholder="// Escreva HTML, CSS ou JavaScript aqui…"
+              placeholder={`// ${activeFile === "html" ? "HTML" : activeFile === "css" ? "CSS" : "JavaScript"}…`}
             />
           </div>
         </section>
 
         {/* Output */}
         <section className="flex min-h-[35vh] w-full flex-col bg-card lg:w-[42%]">
-          <div className="flex items-center justify-between border-b bg-muted/40 px-3 py-1.5 text-xs text-muted-foreground">
+          <div className="flex items-center justify-between border-b bg-muted/40 px-3 py-1.5 text-xs">
             <div className="flex items-center gap-1">
               <button
-                onClick={() => setActiveTab("console")}
+                onClick={() => setActiveTab("validate")}
                 className={`inline-flex items-center gap-1.5 rounded px-2 py-1 ${
-                  activeTab === "console" ? "bg-background font-medium text-foreground shadow-sm" : "text-muted-foreground hover:bg-accent"
+                  activeTab === "validate"
+                    ? "bg-background font-medium text-foreground shadow-sm"
+                    : "text-muted-foreground hover:bg-accent"
                 }`}
               >
-                <Terminal className="h-3.5 w-3.5" />
-                Console ({outputs.length})
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                Executar
+                {diagnostics !== null && (
+                  <span
+                    className={`ml-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
+                      errorCount === 0
+                        ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
+                        : "bg-destructive/15 text-destructive"
+                    }`}
+                  >
+                    {errorCount === 0 ? "OK" : errorCount}
+                  </span>
+                )}
               </button>
               <button
                 onClick={() => setActiveTab("preview")}
                 className={`inline-flex items-center gap-1.5 rounded px-2 py-1 ${
-                  activeTab === "preview" ? "bg-background font-medium text-foreground shadow-sm" : "text-muted-foreground hover:bg-accent"
+                  activeTab === "preview"
+                    ? "bg-background font-medium text-foreground shadow-sm"
+                    : "text-muted-foreground hover:bg-accent"
                 }`}
               >
                 <Layout className="h-3.5 w-3.5" />
                 Preview
               </button>
+              <button
+                onClick={() => setActiveTab("console")}
+                className={`inline-flex items-center gap-1.5 rounded px-2 py-1 ${
+                  activeTab === "console"
+                    ? "bg-background font-medium text-foreground shadow-sm"
+                    : "text-muted-foreground hover:bg-accent"
+                }`}
+              >
+                <Terminal className="h-3.5 w-3.5" />
+                Console ({consoleEntries.length})
+              </button>
             </div>
-            <button
-              onClick={activeTab === "console" ? clearOutputs : refreshPreview}
-              className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs hover:bg-accent"
-            >
-              {activeTab === "console" ? (
-                <>
-                  <Trash2 className="h-3 w-3" />
-                  Limpar
-                </>
-              ) : (
-                <>
-                  <Eye className="h-3 w-3" />
-                  Atualizar
-                </>
-              )}
-            </button>
+            {activeTab === "preview" && (
+              <button
+                onClick={refreshPreview}
+                className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs hover:bg-accent"
+              >
+                <Eye className="h-3 w-3" />
+                Atualizar
+              </button>
+            )}
+            {activeTab === "console" && consoleEntries.length > 0 && (
+              <button
+                onClick={() => setConsoleEntries([])}
+                className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs hover:bg-accent"
+              >
+                <Trash2 className="h-3 w-3" />
+                Limpar
+              </button>
+            )}
           </div>
-          <div className="relative flex-1 overflow-y-auto p-3 font-mono text-xs">
-            {activeTab === "preview" ? (
-              <div className="absolute inset-0 flex flex-col">
-                <iframe
-                  ref={previewRef}
-                  title="preview"
-                  sandbox="allow-scripts"
-                  srcDoc={previewSrcDoc}
-                  className="h-full w-full border-0 bg-white"
-                />
-              </div>
-            ) : (
-              <>
-                {outputs.length === 0 && (
+
+          <div className="relative flex-1 overflow-hidden">
+            {activeTab === "preview" && (
+              <iframe
+                ref={previewRef}
+                title="preview"
+                sandbox="allow-scripts"
+                srcDoc={previewSrcDoc}
+                className="h-full w-full border-0 bg-white"
+              />
+            )}
+
+            {activeTab === "validate" && (
+              <div className="h-full overflow-y-auto p-3 text-xs">
+                {diagnostics === null ? (
                   <p className="text-muted-foreground">
-                    Nenhuma execução ainda. Clique em Executar (⌘⏎) para rodar o
-                    código.
+                    Clique em <strong>Executar</strong> no topo para verificar
+                    se o código está correto.
                   </p>
-                )}
-                {outputs.map((out) => (
-                  <div
-                    key={out.id}
-                    className="mb-3 rounded-md border bg-background p-2.5"
-                  >
-                    <div className="mb-1.5 flex items-center gap-2 text-[10px] uppercase tracking-wider text-muted-foreground">
-                      <span
-                        className="inline-block h-2 w-2 rounded-full"
-                        style={{ backgroundColor: out.authorColor }}
-                      />
-                      <span className="font-sans font-semibold">
-                        {out.authorName}
-                      </span>
-                      <span>· {new Date(out.at).toLocaleTimeString()}</span>
+                ) : diagnostics.length === 0 ? (
+                  <div className="flex items-start gap-2 rounded-md border border-emerald-500/30 bg-emerald-500/10 p-3 text-emerald-700 dark:text-emerald-300">
+                    <CheckCircle2 className="mt-0.5 h-4 w-4 flex-shrink-0" />
+                    <div>
+                      <div className="font-semibold">Tudo certo!</div>
+                      <div className="mt-0.5 text-xs opacity-90">
+                        Nenhum erro encontrado nos arquivos. Abra o Preview para
+                        ver o resultado.
+                      </div>
                     </div>
-                    {out.entries.map((e, i) => (
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {diagnostics.map((d, i) => (
                       <div
                         key={i}
-                        className={
-                          e.level === "error"
-                            ? "whitespace-pre-wrap text-destructive"
-                            : e.level === "warn"
-                              ? "whitespace-pre-wrap text-yellow-600 dark:text-yellow-400"
-                              : "whitespace-pre-wrap text-foreground"
-                        }
+                        className="rounded-md border border-destructive/30 bg-destructive/5 p-3"
                       >
-                        {e.parts.join(" ")}
+                        <div className="flex items-start gap-2">
+                          <XCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-destructive" />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-destructive">
+                              <span>
+                                {d.file === "html"
+                                  ? "index.html"
+                                  : d.file === "css"
+                                    ? "styles.css"
+                                    : "script.js"}
+                              </span>
+                              {d.line && <span>· linha {d.line}</span>}
+                            </div>
+                            <div className="mt-1 font-mono text-xs text-foreground">
+                              {d.message}
+                            </div>
+                            {d.hint && (
+                              <div className="mt-1.5 text-xs text-muted-foreground">
+                                <strong>Como corrigir:</strong> {d.hint}
+                              </div>
+                            )}
+                          </div>
+                        </div>
                       </div>
                     ))}
-                    {out.error && (
-                      <div className="mt-1 whitespace-pre-wrap text-destructive">
-                        ⚠ {out.error}
-                      </div>
-                    )}
                   </div>
-                ))}
-              </>
+                )}
+              </div>
+            )}
+
+            {activeTab === "console" && (
+              <div className="h-full overflow-y-auto p-3 font-mono text-xs">
+                {consoleEntries.length === 0 ? (
+                  <p className="text-muted-foreground">
+                    Nada no console ainda. Rode o Preview para ver os
+                    `console.log` do seu script.js.
+                  </p>
+                ) : (
+                  consoleEntries.map((e, i) => (
+                    <div
+                      key={i}
+                      className={`whitespace-pre-wrap border-b border-border/50 py-1 ${
+                        e.level === "error"
+                          ? "text-destructive"
+                          : e.level === "warn"
+                            ? "text-yellow-600 dark:text-yellow-400"
+                            : "text-foreground"
+                      }`}
+                    >
+                      {e.parts.join(" ")}
+                    </div>
+                  ))
+                )}
+              </div>
             )}
           </div>
         </section>
-      </main>
 
-      {/* Hidden sandbox iframe for isolated execution */}
-      <iframe
-        ref={iframeRef}
-        title="sandbox"
-        sandbox="allow-scripts"
-        srcDoc={SANDBOX_HTML}
-        style={{ display: "none" }}
-      />
+        {/* Side panel: people / chat */}
+        {sidePanel !== "none" && (
+          <aside className="flex w-full flex-col border-t bg-card lg:w-80 lg:border-l lg:border-t-0">
+            <div className="flex items-center justify-between border-b px-3 py-2 text-sm font-semibold">
+              <span>
+                {sidePanel === "people"
+                  ? `Participantes (${participants.length})`
+                  : "Chat da sala"}
+              </span>
+              <button
+                onClick={() => setSidePanel("none")}
+                className="rounded p-1 hover:bg-accent"
+                aria-label="Fechar"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {sidePanel === "people" && (
+              <div className="flex-1 overflow-y-auto p-2">
+                {participants.length === 0 && (
+                  <p className="p-2 text-sm text-muted-foreground">
+                    Ninguém conectado.
+                  </p>
+                )}
+                {participants.map((p) => (
+                  <div
+                    key={p.id}
+                    className="flex items-center gap-2 rounded-md px-2 py-2 hover:bg-accent"
+                  >
+                    <div
+                      className="flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold text-white"
+                      style={{ backgroundColor: p.color }}
+                    >
+                      {p.name.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="flex-1 text-sm">
+                      {p.name}
+                      {p.id === me.id && (
+                        <span className="ml-1 text-xs text-muted-foreground">
+                          (você)
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {sidePanel === "chat" && (
+              <>
+                <div
+                  ref={chatScrollRef}
+                  className="flex-1 space-y-2 overflow-y-auto p-3 text-sm"
+                >
+                  {chat.length === 0 && (
+                    <p className="text-muted-foreground">
+                      Nenhuma mensagem ainda. Diga oi!
+                    </p>
+                  )}
+                  {chat.map((m) => (
+                    <div key={m.id} className="flex flex-col">
+                      <div className="flex items-baseline gap-2">
+                        <span
+                          className="text-xs font-semibold"
+                          style={{ color: m.authorColor }}
+                        >
+                          {m.authorName}
+                          {m.authorId === me.id && (
+                            <span className="ml-1 text-muted-foreground">
+                              (você)
+                            </span>
+                          )}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground">
+                          {new Date(m.at).toLocaleTimeString()}
+                        </span>
+                      </div>
+                      <div className="whitespace-pre-wrap break-words text-sm">
+                        {m.text}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <form
+                  onSubmit={sendChat}
+                  className="flex gap-2 border-t p-2"
+                >
+                  <input
+                    value={chatDraft}
+                    onChange={(e) => setChatDraft(e.target.value)}
+                    placeholder="Escreva uma mensagem…"
+                    className="flex-1 rounded-md border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
+                  />
+                  <button
+                    type="submit"
+                    className="inline-flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+                  >
+                    <Send className="h-3.5 w-3.5" />
+                  </button>
+                </form>
+              </>
+            )}
+          </aside>
+        )}
+      </main>
     </div>
   );
 }
 
-const SANDBOX_HTML = `<!doctype html>
-<html><head><meta charset="utf-8"></head><body>
-<script>
-(function(){
-  function stringify(v){
-    if (v === undefined) return 'undefined';
-    if (v === null) return 'null';
-    if (typeof v === 'string') return v;
-    if (typeof v === 'function') return v.toString();
-    try { return JSON.stringify(v, function(k, val){
-      if (typeof val === 'function') return '[Function ' + (val.name||'anonymous') + ']';
-      if (typeof val === 'undefined') return 'undefined';
-      return val;
-    }, 2); } catch(e) { return String(v); }
+function suggestJsFix(message: string): string | undefined {
+  const m = message.toLowerCase();
+  if (m.includes("unexpected token")) {
+    return "Verifique parênteses, chaves e ponto-e-vírgula próximos ao local indicado.";
   }
-  window.addEventListener('message', function(ev){
-    var data = ev.data;
-    if (!data || data.__codelive !== true || data.type !== 'run') return;
-    var runId = data.runId;
-    var code = data.code || '';
-    var entries = [];
-    var original = { log: console.log, error: console.error, warn: console.warn, info: console.info };
-    ['log','error','warn','info'].forEach(function(level){
-      console[level] = function(){
-        var parts = [];
-        for (var i=0;i<arguments.length;i++) parts.push(stringify(arguments[i]));
-        entries.push({ level: level, parts: parts });
-        try { original[level].apply(console, arguments); } catch(e){}
-      };
-    });
-    var errMsg;
-    try {
-      // Wrap in async so top-level await works and evaluate as expression when possible.
-      var runner = new Function('"use strict"; return (async () => { ' + code + '\\n })();');
-      Promise.resolve(runner()).catch(function(e){
-        entries.push({ level: 'error', parts: [String(e && e.stack || e)] });
-      }).finally(function(){
-        parent.postMessage({ __codelive: true, type: 'result', runId: runId, entries: entries, error: errMsg }, '*');
-      });
-    } catch(e) {
-      errMsg = String(e && e.stack || e);
-      parent.postMessage({ __codelive: true, type: 'result', runId: runId, entries: entries, error: errMsg }, '*');
-    }
-  });
-})();
-</script>
-</body></html>`;
+  if (m.includes("unexpected end of input")) {
+    return "Você provavelmente esqueceu de fechar uma chave '}', parêntese ')' ou aspas.";
+  }
+  if (m.includes("is not defined")) {
+    return "Declare a variável com let/const antes de usá-la, ou verifique se o nome está correto.";
+  }
+  if (m.includes("assignment to constant")) {
+    return "Você está reatribuindo uma const. Use let se o valor precisa mudar.";
+  }
+  if (m.includes("missing ) after")) {
+    return "Falta um ')' fechando uma chamada de função ou expressão.";
+  }
+  if (m.includes("invalid or unexpected token")) {
+    return "Caractere inválido — verifique aspas, acentos ou símbolos estranhos.";
+  }
+  return undefined;
+}
