@@ -109,14 +109,6 @@ interface EditingInfo {
   at: number;
 }
 
-  id: string;
-  authorId: string;
-  authorName: string;
-  authorColor: string;
-  text: string;
-  at: number;
-}
-
 interface Diagnostic {
   file: string;
   line?: number;
