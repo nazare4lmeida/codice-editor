@@ -107,6 +107,11 @@ interface Diagnostic {
   hint?: string;
 }
 
+interface RoomDraftCache {
+  files: Files;
+  savedAt: number;
+}
+
 function randomId() {
   return Math.random().toString(36).slice(2);
 }
@@ -141,6 +146,44 @@ function parseStoredContent(raw: string | null | undefined): Files {
     /<html|<head|<body|<div|<h[1-6]|<script|<style/i.test(trimmed.slice(0, 400));
   if (looksHtml) return { html: raw, css: "", js: "" };
   return { html: DEFAULT_FILES.html, css: DEFAULT_FILES.css, js: raw };
+}
+
+function getDraftKey(code: string) {
+  return `codelive:room:${code}:draft`;
+}
+
+function readDraftCache(code: string): RoomDraftCache | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(getDraftKey(code));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<RoomDraftCache>;
+    if (
+      parsed &&
+      typeof parsed.savedAt === "number" &&
+      parsed.files &&
+      typeof parsed.files.html === "string" &&
+      typeof parsed.files.css === "string" &&
+      typeof parsed.files.js === "string"
+    ) {
+      return { files: parsed.files, savedAt: parsed.savedAt };
+    }
+  } catch {
+    // Ignore malformed local draft data.
+  }
+  return null;
+}
+
+function writeDraftCache(code: string, files: Files) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(
+      getDraftKey(code),
+      JSON.stringify({ files, savedAt: Date.now() } satisfies RoomDraftCache),
+    );
+  } catch {
+    // Storage can fail in private mode or when quota is exceeded.
+  }
 }
 
 function RoomPage() {
@@ -184,21 +227,29 @@ function RoomPage() {
     filesRef.current = files;
   }, [files]);
 
+  const persistFiles = useCallback(
+    (f: Files) =>
+      supabase
+        .from("rooms")
+        .update({
+          content: JSON.stringify(f),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("code", code),
+    [code],
+  );
+
   const persistNow = useCallback(
     (f: Files) => {
       if (persistTimer.current) {
         clearTimeout(persistTimer.current);
         persistTimer.current = null;
       }
-      void supabase
-        .from("rooms")
-        .update({
-          content: JSON.stringify(f),
-          updated_at: new Date().toISOString(),
-        })
-        .eq("code", code);
+      filesRef.current = f;
+      writeDraftCache(code, f);
+      void persistFiles(f);
     },
-    [code],
+    [code, persistFiles],
   );
 
   // Load initial content
@@ -207,13 +258,21 @@ function RoomPage() {
     (async () => {
       const { data } = await supabase
         .from("rooms")
-        .select("content")
+        .select("content, updated_at")
         .eq("code", code)
         .maybeSingle();
       if (!cancelled) {
-        const parsed = parseStoredContent(data?.content);
+        const remoteFiles = parseStoredContent(data?.content);
+        const remoteUpdatedAt = data?.updated_at
+          ? new Date(data.updated_at).getTime()
+          : 0;
+        const cached = readDraftCache(code);
+        const parsed = cached && cached.savedAt > remoteUpdatedAt ? cached.files : remoteFiles;
         setFiles(parsed);
         filesRef.current = parsed;
+        if (cached && cached.savedAt > remoteUpdatedAt) {
+          persistNow(cached.files);
+        }
         setLoaded(true);
       }
     })();
@@ -263,7 +322,10 @@ function RoomPage() {
         ) {
           setFiles((prev) => {
             if (prev[p.file as FileKey] === p.value) return prev;
-            return { ...prev, [p.file as FileKey]: p.value as string };
+            const next = { ...prev, [p.file as FileKey]: p.value as string };
+            filesRef.current = next;
+            writeDraftCache(code, next);
+            return next;
           });
         }
       })
@@ -302,6 +364,8 @@ function RoomPage() {
       setFiles((prev) => {
         if (prev[key] === value) return prev;
         const next = { ...prev, [key]: value };
+        filesRef.current = next;
+        writeDraftCache(code, next);
         const channel = channelRef.current;
         if (channel) {
           channel.send({
@@ -313,18 +377,12 @@ function RoomPage() {
         if (persistTimer.current) clearTimeout(persistTimer.current);
         persistTimer.current = setTimeout(() => {
           persistTimer.current = null;
-          void supabase
-            .from("rooms")
-            .update({
-              content: JSON.stringify(next),
-              updated_at: new Date().toISOString(),
-            })
-            .eq("code", code);
+          void persistFiles(next);
         }, 600);
         return next;
       });
     },
-    [code, me.id],
+    [code, me.id, persistFiles],
   );
 
   // Combine files into a single HTML doc with inline <style> and <script>
