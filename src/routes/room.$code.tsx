@@ -710,6 +710,19 @@ function RoomPage() {
     });
   }
 
+  function broadcastEditing(path: string) {
+    // Throttle to at most 1 msg / 1.2s per user: 30 students typing = ~25 msgs/s
+    // per room instead of 300+.
+    const now = Date.now();
+    if (now - lastEditingSentAtRef.current < 1200) return;
+    lastEditingSentAtRef.current = now;
+    channelRef.current?.send({
+      type: "broadcast",
+      event: "editing",
+      payload: { from: me.id, name: me.name, color: me.color, path },
+    });
+  }
+
   function updateFile(path: string, value: string) {
     if (!loadedRef.current) return;
     setFiles((prev) => {
@@ -717,9 +730,11 @@ function RoomPage() {
       const next = normalizeFiles({ ...prev, [path]: value });
       schedulePersist(next, activePathRef.current);
       broadcastPatch(path, value);
+      broadcastEditing(path);
       return next;
     });
   }
+
 
   function createFile(name: string) {
     if (!loadedRef.current) return;
