@@ -402,7 +402,7 @@ function RoomPage() {
               onKeyDown={onKeyDown}
               spellCheck={false}
               className="absolute inset-0 h-full w-full resize-none border-0 bg-background p-4 font-mono text-sm leading-6 outline-none"
-              placeholder="// Escreva JavaScript aqui…"
+              placeholder="// Escreva HTML, CSS ou JavaScript aqui…"
             />
           </div>
         </section>
