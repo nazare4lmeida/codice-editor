@@ -410,16 +410,44 @@ function RoomPage() {
         {/* Output */}
         <section className="flex min-h-[35vh] w-full flex-col bg-card lg:w-[42%]">
           <div className="flex items-center justify-between border-b bg-muted/40 px-3 py-1.5 text-xs text-muted-foreground">
-            <span>Saída ({outputs.length})</span>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setActiveTab("console")}
+                className={`inline-flex items-center gap-1.5 rounded px-2 py-1 ${
+                  activeTab === "console" ? "bg-background font-medium text-foreground shadow-sm" : "text-muted-foreground hover:bg-accent"
+                }`}
+              >
+                <Terminal className="h-3.5 w-3.5" />
+                Console ({outputs.length})
+              </button>
+              <button
+                onClick={() => setActiveTab("preview")}
+                className={`inline-flex items-center gap-1.5 rounded px-2 py-1 ${
+                  activeTab === "preview" ? "bg-background font-medium text-foreground shadow-sm" : "text-muted-foreground hover:bg-accent"
+                }`}
+              >
+                <Layout className="h-3.5 w-3.5" />
+                Preview
+              </button>
+            </div>
             <button
-              onClick={clearOutputs}
+              onClick={activeTab === "console" ? clearOutputs : () => setPreviewVersion((v) => v + 1)}
               className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs hover:bg-accent"
             >
-              <Trash2 className="h-3 w-3" />
-              Limpar
+              {activeTab === "console" ? (
+                <>
+                  <Trash2 className="h-3 w-3" />
+                  Limpar
+                </>
+              ) : (
+                <>
+                  <Eye className="h-3 w-3" />
+                  Atualizar
+                </>
+              )}
             </button>
           </div>
-          <div className="flex-1 overflow-y-auto p-3 font-mono text-xs">
+          <div className="relative flex-1 overflow-y-auto p-3 font-mono text-xs">
             {outputs.length === 0 && (
               <p className="text-muted-foreground">
                 Nenhuma execução ainda. Clique em Executar (⌘⏎) para rodar o
