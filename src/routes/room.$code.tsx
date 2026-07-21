@@ -176,8 +176,30 @@ function RoomPage() {
   const channelRef = useRef<RealtimeChannel | null>(null);
   const previewRef = useRef<HTMLIFrameElement | null>(null);
   const persistTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const remoteApplying = useRef(false);
+  const filesRef = useRef<Files>(DEFAULT_FILES);
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
+
+  // Keep a ref of files for flush-on-unmount / beforeunload persistence.
+  useEffect(() => {
+    filesRef.current = files;
+  }, [files]);
+
+  const persistNow = useCallback(
+    (f: Files) => {
+      if (persistTimer.current) {
+        clearTimeout(persistTimer.current);
+        persistTimer.current = null;
+      }
+      void supabase
+        .from("rooms")
+        .update({
+          content: JSON.stringify(f),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("code", code);
+    },
+    [code],
+  );
 
   // Load initial content
   useEffect(() => {
@@ -189,7 +211,9 @@ function RoomPage() {
         .eq("code", code)
         .maybeSingle();
       if (!cancelled) {
-        setFiles(parseStoredContent(data?.content));
+        const parsed = parseStoredContent(data?.content);
+        setFiles(parsed);
+        filesRef.current = parsed;
         setLoaded(true);
       }
     })();
@@ -197,6 +221,20 @@ function RoomPage() {
       cancelled = true;
     };
   }, [code]);
+
+  // Flush pending edits before the tab closes / on unmount.
+  useEffect(() => {
+    const flush = () => {
+      if (persistTimer.current) {
+        persistNow(filesRef.current);
+      }
+    };
+    window.addEventListener("beforeunload", flush);
+    return () => {
+      window.removeEventListener("beforeunload", flush);
+      flush();
+    };
+  }, [persistNow]);
 
   // Realtime channel: presence + broadcast
   useEffect(() => {
