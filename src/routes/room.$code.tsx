@@ -431,6 +431,8 @@ function RoomPage() {
   const lastSavedPayloadRef = useRef("");
   const loadedRef = useRef(false);
   const dirtyRef = useRef(false);
+  const lastEditingSentAtRef = useRef(0);
+  const editingCleanupRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const orderedPaths = useMemo(() => sortFiles(files), [files]);
   const currentValue = files[activePath] ?? "";
