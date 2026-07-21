@@ -252,16 +252,19 @@ function RoomPage() {
         });
         setParticipants(list);
       })
-      .on("broadcast", { event: "files" }, (payload) => {
-        const next = payload.payload?.files as Files | undefined;
+      .on("broadcast", { event: "file" }, (payload) => {
+        const p = payload.payload as
+          | { file?: FileKey; value?: string; from?: string }
+          | undefined;
+        if (!p || p.from === me.id) return;
         if (
-          next &&
-          typeof next.html === "string" &&
-          typeof next.css === "string" &&
-          typeof next.js === "string"
+          (p.file === "html" || p.file === "css" || p.file === "js") &&
+          typeof p.value === "string"
         ) {
-          remoteApplying.current = true;
-          setFiles(next);
+          setFiles((prev) => {
+            if (prev[p.file as FileKey] === p.value) return prev;
+            return { ...prev, [p.file as FileKey]: p.value as string };
+          });
         }
       })
       .on("broadcast", { event: "chat" }, (payload) => {
