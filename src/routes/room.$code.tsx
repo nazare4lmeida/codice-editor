@@ -228,6 +228,89 @@ function RoomPage() {
     setTimeout(() => setCopied(false), 1500);
   }
 
+  function looksLikeHtml(code: string) {
+    const trimmed = code.trim().toLowerCase();
+    return (
+      trimmed.startsWith("<") ||
+      /^<!doctype\shtml/.test(trimmed) ||
+      /<html|head|body|div|span|h[1-6]|p|button|input|form|section|header|footer/i.test(
+        trimmed.slice(0, 200),
+      )
+    );
+  }
+
+  function buildPreviewHtml(code: string) {
+    if (looksLikeHtml(code)) {
+      return code;
+    }
+    return `<!doctype html>
+<html><head><meta charset="utf-8"><style>body{font-family:system-ui,sans-serif;padding:1rem;line-height:1.5}</style></head><body>
+<script>
+(function(){
+  function stringify(v){
+    if (v === undefined) return 'undefined';
+    if (v === null) return 'null';
+    if (typeof v === 'string') return v;
+    if (typeof v === 'function') return v.toString();
+    try { return JSON.stringify(v, function(k, val){
+      if (typeof val === 'function') return '[Function ' + (val.name||'anonymous') + ']';
+      if (typeof val === 'undefined') return 'undefined';
+      return val;
+    }, 2); } catch(e) { return String(v); }
+  }
+  var original = { log: console.log, error: console.error, warn: console.warn, info: console.info };
+  ['log','error','warn','info'].forEach(function(level){
+    console[level] = function(){
+      var el = document.createElement('div');
+      el.style.cssText = 'white-space:pre-wrap;font-family:monospace;font-size:12px;margin:2px 0;padding:2px 0;border-bottom:1px solid #eee';
+      var parts = [];
+      for (var i=0;i<arguments.length;i++) parts.push(stringify(arguments[i]));
+      el.textContent = parts.join(' ');
+      document.body.appendChild(el);
+      try { original[level].apply(console, arguments); } catch(e){}
+    };
+  });
+  window.onerror = function(msg, url, line, col, err){
+    var el = document.createElement('div');
+    el.style.cssText = 'color:#ef4444;white-space:pre-wrap;font-family:monospace;font-size:12px;margin:2px 0';
+    el.textContent = '⚠ ' + (err && err.stack || msg);
+    document.body.appendChild(el);
+  };
+  try {
+    var runner = new Function('"use strict"; return (async () => { ' + code + '\\n })();');
+    Promise.resolve(runner()).catch(function(e){
+      var el = document.createElement('div');
+      el.style.cssText = 'color:#ef4444;white-space:pre-wrap;font-family:monospace;font-size:12px;margin:2px 0';
+      el.textContent = '⚠ ' + (e && e.stack || e);
+      document.body.appendChild(el);
+    });
+  } catch(e) {
+    var el = document.createElement('div');
+    el.style.cssText = 'color:#ef4444;white-space:pre-wrap;font-family:monospace;font-size:12px;margin:2px 0';
+    el.textContent = '⚠ ' + (e && e.stack || e);
+    document.body.appendChild(el);
+  }
+})();
+</script>
+</body></html>`;
+  }
+
+  function updatePreview() {
+    const iframe = previewRef.current;
+    if (!iframe) return;
+    const doc = iframe.contentDocument || iframe.contentWindow?.document;
+    if (!doc) return;
+    doc.open();
+    doc.write(buildPreviewHtml(content));
+    doc.close();
+  }
+
+  useEffect(() => {
+    if (activeTab === "preview") {
+      updatePreview();
+    }
+  }, [activeTab, previewVersion]);
+
   // Handle Ctrl/Cmd + Enter
   function onKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
