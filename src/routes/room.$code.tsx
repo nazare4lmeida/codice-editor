@@ -598,19 +598,30 @@ function RoomPage() {
       .on("presence", { event: "sync" }, () => {
         const state = channel.presenceState<Participant>();
         const list: Participant[] = [];
+        const alive = new Set<string>();
         Object.values(state).forEach((entries) => {
-          entries.forEach((entry) => list.push(entry as Participant));
+          entries.forEach((entry) => {
+            const p = entry as Participant;
+            list.push(p);
+            alive.add(p.id);
+          });
         });
         setParticipants(list);
+        // Drop editing indicators for users who left the room.
+        setEditing((prev) => {
+          const next: Record<string, EditingInfo> = {};
+          for (const [id, info] of Object.entries(prev)) if (alive.has(id)) next[id] = info;
+          return next;
+        });
       })
       .on("broadcast", { event: "file_patch" }, (payload) => {
         const p = payload.payload as
-          | { path?: string; content?: string; deleted?: boolean; from?: string; activePath?: string }
+          | { path?: string; content?: string; deleted?: boolean; from?: string }
           | undefined;
         if (!p || p.from === me.id || !p.path) return;
         const path = cleanPath(p.path);
         if (!path) return;
-        setFiles((prev) => {
+        updateLocalFilesFromRemote((prev) => {
           const next = { ...prev };
           if (p.deleted) delete next[path];
           else next[path] = typeof p.content === "string" ? p.content : "";
@@ -618,11 +629,17 @@ function RoomPage() {
           const nextActive =
             p.deleted && activePathRef.current === path
               ? sortFiles(normalized)[0]
-              : activePathRef.current;
-          if (nextActive !== activePathRef.current) setActivePath(nextActive);
-          schedulePersist(normalized, nextActive);
-          return normalized;
+              : undefined;
+          return { next: normalized, nextActive };
         });
+      })
+      .on("broadcast", { event: "editing" }, (payload) => {
+        const p = payload.payload as { from?: string; name?: string; color?: string; path?: string } | undefined;
+        if (!p || !p.from || p.from === me.id || !p.path) return;
+        setEditing((prev) => ({
+          ...prev,
+          [p.from!]: { name: p.name || "Alguém", color: p.color || "#3b82f6", path: p.path!, at: Date.now() },
+        }));
       })
       .on("broadcast", { event: "chat" }, (payload) => {
         const msg = payload.payload as ChatMsg;
@@ -637,11 +654,27 @@ function RoomPage() {
       });
 
     channelRef.current = channel;
+    // Expire editing indicators that haven't refreshed in 4s.
+    editingCleanupRef.current = setInterval(() => {
+      const cutoff = Date.now() - 4000;
+      setEditing((prev) => {
+        let changed = false;
+        const next: Record<string, EditingInfo> = {};
+        for (const [id, info] of Object.entries(prev)) {
+          if (info.at >= cutoff) next[id] = info;
+          else changed = true;
+        }
+        return changed ? next : prev;
+      });
+    }, 1500);
     return () => {
       supabase.removeChannel(channel);
       channelRef.current = null;
+      if (editingCleanupRef.current) clearInterval(editingCleanupRef.current);
+      editingCleanupRef.current = null;
     };
-  }, [loaded, code, me, schedulePersist]);
+  }, [loaded, code, me, updateLocalFilesFromRemote]);
+
 
   useEffect(() => {
     if (sidePanel === "chat" && chatScrollRef.current) {
