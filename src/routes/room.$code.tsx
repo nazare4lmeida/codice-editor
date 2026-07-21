@@ -19,6 +19,7 @@ import {
   Users,
   X,
   XCircle,
+  Pencil,
 } from "lucide-react";
 
 export const Route = createFileRoute("/room/$code")({
