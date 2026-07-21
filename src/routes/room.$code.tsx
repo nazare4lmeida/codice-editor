@@ -413,6 +413,7 @@ function RoomPage() {
   const [unreadChat, setUnreadChat] = useState(0);
   const [addingFile, setAddingFile] = useState(false);
   const [newFileName, setNewFileName] = useState("");
+  const [editing, setEditing] = useState<Record<string, EditingInfo>>({});
 
   const me = useMemo<Participant>(() => {
     const id = randomId();
