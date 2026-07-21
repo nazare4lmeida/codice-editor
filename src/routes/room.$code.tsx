@@ -448,48 +448,61 @@ function RoomPage() {
             </button>
           </div>
           <div className="relative flex-1 overflow-y-auto p-3 font-mono text-xs">
-            {outputs.length === 0 && (
-              <p className="text-muted-foreground">
-                Nenhuma execução ainda. Clique em Executar (⌘⏎) para rodar o
-                código.
-              </p>
-            )}
-            {outputs.map((out) => (
-              <div
-                key={out.id}
-                className="mb-3 rounded-md border bg-background p-2.5"
-              >
-                <div className="mb-1.5 flex items-center gap-2 text-[10px] uppercase tracking-wider text-muted-foreground">
-                  <span
-                    className="inline-block h-2 w-2 rounded-full"
-                    style={{ backgroundColor: out.authorColor }}
-                  />
-                  <span className="font-sans font-semibold">
-                    {out.authorName}
-                  </span>
-                  <span>· {new Date(out.at).toLocaleTimeString()}</span>
-                </div>
-                {out.entries.map((e, i) => (
+            {activeTab === "preview" ? (
+              <div className="absolute inset-0 flex flex-col">
+                <iframe
+                  ref={previewRef}
+                  title="preview"
+                  sandbox="allow-scripts"
+                  className="h-full w-full border-0 bg-white"
+                />
+              </div>
+            ) : (
+              <>
+                {outputs.length === 0 && (
+                  <p className="text-muted-foreground">
+                    Nenhuma execução ainda. Clique em Executar (⌘⏎) para rodar o
+                    código.
+                  </p>
+                )}
+                {outputs.map((out) => (
                   <div
-                    key={i}
-                    className={
-                      e.level === "error"
-                        ? "whitespace-pre-wrap text-destructive"
-                        : e.level === "warn"
-                          ? "whitespace-pre-wrap text-yellow-600 dark:text-yellow-400"
-                          : "whitespace-pre-wrap text-foreground"
-                    }
+                    key={out.id}
+                    className="mb-3 rounded-md border bg-background p-2.5"
                   >
-                    {e.parts.join(" ")}
+                    <div className="mb-1.5 flex items-center gap-2 text-[10px] uppercase tracking-wider text-muted-foreground">
+                      <span
+                        className="inline-block h-2 w-2 rounded-full"
+                        style={{ backgroundColor: out.authorColor }}
+                      />
+                      <span className="font-sans font-semibold">
+                        {out.authorName}
+                      </span>
+                      <span>· {new Date(out.at).toLocaleTimeString()}</span>
+                    </div>
+                    {out.entries.map((e, i) => (
+                      <div
+                        key={i}
+                        className={
+                          e.level === "error"
+                            ? "whitespace-pre-wrap text-destructive"
+                            : e.level === "warn"
+                              ? "whitespace-pre-wrap text-yellow-600 dark:text-yellow-400"
+                              : "whitespace-pre-wrap text-foreground"
+                        }
+                      >
+                        {e.parts.join(" ")}
+                      </div>
+                    ))}
+                    {out.error && (
+                      <div className="mt-1 whitespace-pre-wrap text-destructive">
+                        ⚠ {out.error}
+                      </div>
+                    )}
                   </div>
                 ))}
-                {out.error && (
-                  <div className="mt-1 whitespace-pre-wrap text-destructive">
-                    ⚠ {out.error}
-                  </div>
-                )}
-              </div>
-            ))}
+              </>
+            )}
           </div>
         </section>
       </main>
