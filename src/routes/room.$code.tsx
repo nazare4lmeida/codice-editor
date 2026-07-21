@@ -302,21 +302,16 @@ function RoomPage() {
 </body></html>`;
   }
 
-  function updatePreview() {
-    const iframe = previewRef.current;
-    if (!iframe) return;
-    const doc = iframe.contentDocument || iframe.contentWindow?.document;
-    if (!doc) return;
-    doc.open();
-    doc.write(buildPreviewHtml(content));
-    doc.close();
-  }
+  const refreshPreview = useCallback(() => {
+    setPreviewSrcDoc(buildPreviewHtml(content));
+  }, [content]);
 
   useEffect(() => {
-    if (activeTab === "preview") {
-      updatePreview();
+    if (activeTab === "preview" && !previewSrcDoc) {
+      setPreviewSrcDoc(buildPreviewHtml(content));
     }
-  }, [activeTab, previewVersion]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
 
   // Handle Ctrl/Cmd + Enter
   function onKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
