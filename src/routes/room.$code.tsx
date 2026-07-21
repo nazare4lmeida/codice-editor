@@ -486,7 +486,8 @@ function RoomPage() {
       persistTimer.current = setTimeout(() => {
         persistTimer.current = null;
         void saveProject(filesRef.current, activePathRef.current);
-      }, 350);
+      }, 120);
+      void saveProject(normalized, nextActivePath);
     },
     [code, saveProject],
   );
