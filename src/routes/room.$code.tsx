@@ -63,7 +63,7 @@ function RoomPage() {
   const [copied, setCopied] = useState(false);
   const [running, setRunning] = useState(false);
   const [activeTab, setActiveTab] = useState<"console" | "preview">("console");
-  const [previewVersion, setPreviewVersion] = useState(0);
+  const [previewSrcDoc, setPreviewSrcDoc] = useState<string>("");
 
   const me = useMemo<Participant>(() => {
     const id = randomId();
@@ -194,6 +194,13 @@ function RoomPage() {
   }, [me]);
 
   function runCode() {
+    // If the code looks like HTML, route it to the Preview tab instead of
+    // trying to eval it as JavaScript (which would throw a SyntaxError).
+    if (looksLikeHtml(content)) {
+      setActiveTab("preview");
+      setPreviewSrcDoc(buildPreviewHtml(content));
+      return;
+    }
     const iframe = iframeRef.current;
     if (!iframe?.contentWindow) return;
     setRunning(true);
@@ -295,21 +302,16 @@ function RoomPage() {
 </body></html>`;
   }
 
-  function updatePreview() {
-    const iframe = previewRef.current;
-    if (!iframe) return;
-    const doc = iframe.contentDocument || iframe.contentWindow?.document;
-    if (!doc) return;
-    doc.open();
-    doc.write(buildPreviewHtml(content));
-    doc.close();
-  }
+  const refreshPreview = useCallback(() => {
+    setPreviewSrcDoc(buildPreviewHtml(content));
+  }, [content]);
 
   useEffect(() => {
-    if (activeTab === "preview") {
-      updatePreview();
+    if (activeTab === "preview" && !previewSrcDoc) {
+      setPreviewSrcDoc(buildPreviewHtml(content));
     }
-  }, [activeTab, previewVersion]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
 
   // Handle Ctrl/Cmd + Enter
   function onKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -431,7 +433,7 @@ function RoomPage() {
               </button>
             </div>
             <button
-              onClick={activeTab === "console" ? clearOutputs : () => setPreviewVersion((v) => v + 1)}
+              onClick={activeTab === "console" ? clearOutputs : refreshPreview}
               className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs hover:bg-accent"
             >
               {activeTab === "console" ? (
@@ -454,6 +456,7 @@ function RoomPage() {
                   ref={previewRef}
                   title="preview"
                   sandbox="allow-scripts"
+                  srcDoc={previewSrcDoc}
                   className="h-full w-full border-0 bg-white"
                 />
               </div>
