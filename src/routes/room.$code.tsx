@@ -433,7 +433,7 @@ function RoomPage() {
               </button>
             </div>
             <button
-              onClick={activeTab === "console" ? clearOutputs : () => setPreviewVersion((v) => v + 1)}
+              onClick={activeTab === "console" ? clearOutputs : refreshPreview}
               className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs hover:bg-accent"
             >
               {activeTab === "console" ? (
@@ -456,6 +456,7 @@ function RoomPage() {
                   ref={previewRef}
                   title="preview"
                   sandbox="allow-scripts"
+                  srcDoc={previewSrcDoc}
                   className="h-full w-full border-0 bg-white"
                 />
               </div>
