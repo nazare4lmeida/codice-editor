@@ -76,6 +76,7 @@ function RoomPage() {
 
   const channelRef = useRef<RealtimeChannel | null>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  const previewRef = useRef<HTMLIFrameElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const persistTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const remoteApplying = useRef(false);
