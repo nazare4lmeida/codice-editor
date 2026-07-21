@@ -176,8 +176,30 @@ function RoomPage() {
   const channelRef = useRef<RealtimeChannel | null>(null);
   const previewRef = useRef<HTMLIFrameElement | null>(null);
   const persistTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const remoteApplying = useRef(false);
+  const filesRef = useRef<Files>(DEFAULT_FILES);
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
+
+  // Keep a ref of files for flush-on-unmount / beforeunload persistence.
+  useEffect(() => {
+    filesRef.current = files;
+  }, [files]);
+
+  const persistNow = useCallback(
+    (f: Files) => {
+      if (persistTimer.current) {
+        clearTimeout(persistTimer.current);
+        persistTimer.current = null;
+      }
+      void supabase
+        .from("rooms")
+        .update({
+          content: JSON.stringify(f),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("code", code);
+    },
+    [code],
+  );
 
   // Load initial content
   useEffect(() => {
@@ -189,7 +211,9 @@ function RoomPage() {
         .eq("code", code)
         .maybeSingle();
       if (!cancelled) {
-        setFiles(parseStoredContent(data?.content));
+        const parsed = parseStoredContent(data?.content);
+        setFiles(parsed);
+        filesRef.current = parsed;
         setLoaded(true);
       }
     })();
@@ -197,6 +221,20 @@ function RoomPage() {
       cancelled = true;
     };
   }, [code]);
+
+  // Flush pending edits before the tab closes / on unmount.
+  useEffect(() => {
+    const flush = () => {
+      if (persistTimer.current) {
+        persistNow(filesRef.current);
+      }
+    };
+    window.addEventListener("beforeunload", flush);
+    return () => {
+      window.removeEventListener("beforeunload", flush);
+      flush();
+    };
+  }, [persistNow]);
 
   // Realtime channel: presence + broadcast
   useEffect(() => {
@@ -214,16 +252,19 @@ function RoomPage() {
         });
         setParticipants(list);
       })
-      .on("broadcast", { event: "files" }, (payload) => {
-        const next = payload.payload?.files as Files | undefined;
+      .on("broadcast", { event: "file" }, (payload) => {
+        const p = payload.payload as
+          | { file?: FileKey; value?: string; from?: string }
+          | undefined;
+        if (!p || p.from === me.id) return;
         if (
-          next &&
-          typeof next.html === "string" &&
-          typeof next.css === "string" &&
-          typeof next.js === "string"
+          (p.file === "html" || p.file === "css" || p.file === "js") &&
+          typeof p.value === "string"
         ) {
-          remoteApplying.current = true;
-          setFiles(next);
+          setFiles((prev) => {
+            if (prev[p.file as FileKey] === p.value) return prev;
+            return { ...prev, [p.file as FileKey]: p.value as string };
+          });
         }
       })
       .on("broadcast", { event: "chat" }, (payload) => {
@@ -255,29 +296,31 @@ function RoomPage() {
     if (sidePanel === "chat") setUnreadChat(0);
   }, [chat, sidePanel]);
 
-  // Broadcast changes + debounce persist
+  // Broadcast per-file changes + debounce persist
   const updateFile = useCallback(
     (key: FileKey, value: string) => {
       setFiles((prev) => {
+        if (prev[key] === value) return prev;
         const next = { ...prev, [key]: value };
         const channel = channelRef.current;
         if (channel) {
           channel.send({
             type: "broadcast",
-            event: "files",
-            payload: { files: next, from: me.id },
+            event: "file",
+            payload: { file: key, value, from: me.id },
           });
         }
         if (persistTimer.current) clearTimeout(persistTimer.current);
         persistTimer.current = setTimeout(() => {
-          supabase
+          persistTimer.current = null;
+          void supabase
             .from("rooms")
             .update({
               content: JSON.stringify(next),
               updated_at: new Date().toISOString(),
             })
             .eq("code", code);
-        }, 800);
+        }, 600);
         return next;
       });
     },
@@ -620,13 +663,7 @@ function RoomPage() {
           <div className="relative flex-1">
             <textarea
               value={currentValue}
-              onChange={(e) => {
-                if (remoteApplying.current) {
-                  remoteApplying.current = false;
-                  return;
-                }
-                updateFile(activeFile, e.target.value);
-              }}
+              onChange={(e) => updateFile(activeFile, e.target.value)}
               spellCheck={false}
               className="absolute inset-0 h-full w-full resize-none border-0 bg-background p-4 font-mono text-sm leading-6 outline-none"
               placeholder={`// ${activeFile === "html" ? "HTML" : activeFile === "css" ? "CSS" : "JavaScript"}…`}
