@@ -194,6 +194,13 @@ function RoomPage() {
   }, [me]);
 
   function runCode() {
+    // If the code looks like HTML, route it to the Preview tab instead of
+    // trying to eval it as JavaScript (which would throw a SyntaxError).
+    if (looksLikeHtml(content)) {
+      setActiveTab("preview");
+      setPreviewSrcDoc(buildPreviewHtml(content));
+      return;
+    }
     const iframe = iframeRef.current;
     if (!iframe?.contentWindow) return;
     setRunning(true);
