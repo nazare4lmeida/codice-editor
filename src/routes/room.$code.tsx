@@ -872,8 +872,9 @@ function RoomPage() {
     });
   }
 
-  function validateProject(project: ProjectFiles): Diagnostic[] {
+  function validateProject(projectInput: ProjectFiles): Diagnostic[] {
     const diags: Diagnostic[] = [];
+    const project = stripCommentsFromFiles(projectInput);
 
     for (const [path, content] of Object.entries(project)) {
       const kind = fileKind(path);
