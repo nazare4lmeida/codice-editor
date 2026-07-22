@@ -304,8 +304,61 @@ function jsOrder(path: string) {
   return 1;
 }
 
+function stripJsComments(src: string) {
+  let out = "", i = 0;
+  const n = src.length;
+  while (i < n) {
+    const c = src[i], d = src[i + 1];
+    if (c === "/" && d === "/") { while (i < n && src[i] !== "\n") i++; continue; }
+    if (c === "/" && d === "*") { i += 2; while (i < n && !(src[i] === "*" && src[i + 1] === "/")) i++; i += 2; continue; }
+    if (c === '"' || c === "'" || c === "`") {
+      const q = c; out += c; i++;
+      while (i < n) {
+        if (src[i] === "\\") { out += src[i] + (src[i + 1] ?? ""); i += 2; continue; }
+        out += src[i];
+        if (src[i] === q) { i++; break; }
+        i++;
+      }
+      continue;
+    }
+    out += c; i++;
+  }
+  return out;
+}
+
+function stripCommentsForFile(path: string, content: string) {
+  const kind = fileKind(path);
+  if (kind === "js" || kind === "json") return stripJsComments(content);
+  if (kind === "css") return content.replace(/\/\*[\s\S]*?\*\//g, "");
+  if (kind === "html") {
+    // preserva <!doctype ...>; remove apenas comentários HTML
+    let out = "";
+    let i = 0;
+    while (i < content.length) {
+      if (content.startsWith("<!--", i)) {
+        const end = content.indexOf("-->", i + 4);
+        if (end === -1) break;
+        i = end + 3;
+        continue;
+      }
+      out += content[i++];
+    }
+    // remove comentários dentro de <style> e <script> inline
+    out = out.replace(/<style\b[^>]*>([\s\S]*?)<\/style>/gi, (_, css) => `<style>${css.replace(/\/\*[\s\S]*?\*\//g, "")}</style>`);
+    out = out.replace(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi, (_, attrs, js) => `<script${attrs}>${stripJsComments(js)}</script>`);
+    return out;
+  }
+  return content;
+}
+
+function stripCommentsFromFiles(files: ProjectFiles): ProjectFiles {
+  const out: ProjectFiles = {};
+  for (const [path, content] of Object.entries(files)) out[path] = stripCommentsForFile(path, content);
+  return out;
+}
+
 function buildPreviewHtml(filesInput: ProjectFiles) {
-  const files = normalizeFiles(filesInput);
+  const files = stripCommentsFromFiles(normalizeFiles(filesInput));
   const htmlPath = files["index.html"] !== undefined
     ? "index.html"
     : Object.keys(files).find((path) => fileKind(path) === "html");
