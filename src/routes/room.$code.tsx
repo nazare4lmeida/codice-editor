@@ -15,6 +15,7 @@ import {
   Plus,
   Save,
   Send,
+  Smile,
   Terminal,
   Trash2,
   Upload,
@@ -533,6 +534,55 @@ function RoomPage() {
   const [addingFile, setAddingFile] = useState(false);
   const [newFileName, setNewFileName] = useState("");
   const [editing, setEditing] = useState<Record<string, EditingInfo>>({});
+  const [outputWidth, setOutputWidth] = useState<number>(() => {
+    if (typeof window === "undefined") return 560;
+    const v = Number(localStorage.getItem("codice:layout:output"));
+    return Number.isFinite(v) && v >= 240 ? v : 560;
+  });
+  const [asideWidth, setAsideWidth] = useState<number>(() => {
+    if (typeof window === "undefined") return 320;
+    const v = Number(localStorage.getItem("codice:layout:aside"));
+    return Number.isFinite(v) && v >= 240 ? v : 320;
+  });
+  const [emojiOpen, setEmojiOpen] = useState(false);
+  const [isDesktop, setIsDesktop] = useState<boolean>(() => typeof window !== "undefined" && window.matchMedia("(min-width: 1024px)").matches);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mql = window.matchMedia("(min-width: 1024px)");
+    const handler = (e: MediaQueryListEvent) => setIsDesktop(e.matches);
+    mql.addEventListener("change", handler);
+    return () => mql.removeEventListener("change", handler);
+  }, []);
+
+  useEffect(() => {
+    try { localStorage.setItem("codice:layout:output", String(outputWidth)); } catch {}
+  }, [outputWidth]);
+  useEffect(() => {
+    try { localStorage.setItem("codice:layout:aside", String(asideWidth)); } catch {}
+  }, [asideWidth]);
+
+  const startResize = useCallback((getCurrent: () => number, setter: (n: number) => void, min: number, max: number) => (e: React.PointerEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const start = getCurrent();
+    const onMove = (ev: PointerEvent) => {
+      // dragging left => grow (panel is on the right side of the handle)
+      const delta = startX - ev.clientX;
+      const next = Math.min(max, Math.max(min, start + delta));
+      setter(next);
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  }, []);
 
   const me = useMemo<Participant>(() => {
     const id = randomId();
@@ -1314,7 +1364,20 @@ function RoomPage() {
 
         </section>
 
-        <section className="flex min-h-[35vh] w-full flex-col bg-card lg:min-h-0 lg:w-[46%]">
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Redimensionar painel de saída"
+          onPointerDown={startResize(() => outputWidth, setOutputWidth, 280, 1100)}
+          onDoubleClick={() => setOutputWidth(560)}
+          className="hidden lg:block w-1.5 shrink-0 cursor-col-resize bg-border hover:bg-primary/50 transition-colors"
+          title="Arraste para redimensionar (duplo clique reseta)"
+        />
+
+        <section
+          className="flex min-h-[35vh] w-full flex-col bg-card lg:min-h-0 lg:shrink-0"
+          style={{ width: isDesktop ? outputWidth : undefined }}
+        >
           <div className="flex items-center justify-between border-b bg-muted/40 px-3 py-1.5 text-xs">
             <div className="flex items-center gap-1">
               <button onClick={() => setActiveTab("validate")} className={`inline-flex items-center gap-1.5 rounded px-2 py-1 ${activeTab === "validate" ? "bg-background font-medium text-foreground shadow-sm" : "text-muted-foreground hover:bg-accent"}`}>
@@ -1385,7 +1448,21 @@ function RoomPage() {
         </section>
 
         {sidePanel !== "none" && (
-          <aside className="flex max-h-[70vh] w-full flex-col border-t bg-card lg:h-full lg:max-h-none lg:w-80 lg:border-l lg:border-t-0">
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Redimensionar painel lateral"
+            onPointerDown={startResize(() => asideWidth, setAsideWidth, 260, 640)}
+            onDoubleClick={() => setAsideWidth(320)}
+            className="hidden lg:block w-1.5 shrink-0 cursor-col-resize bg-border hover:bg-primary/50 transition-colors"
+            title="Arraste para redimensionar (duplo clique reseta)"
+          />
+        )}
+        {sidePanel !== "none" && (
+          <aside
+            className="flex max-h-[70vh] w-full flex-col border-t bg-card lg:h-full lg:max-h-none lg:shrink-0 lg:border-l lg:border-t-0"
+            style={{ width: isDesktop ? asideWidth : undefined }}
+          >
             <div className="flex items-center justify-between border-b px-3 py-2 text-sm font-semibold">
               <span>{sidePanel === "people" ? `Participantes (${participants.length})` : "Chat da sala"}</span>
               <button onClick={() => setSidePanel("none")} className="rounded p-1 hover:bg-accent" aria-label="Fechar"><X className="h-4 w-4" /></button>
@@ -1417,7 +1494,28 @@ function RoomPage() {
                     </div>
                   ))}
                 </div>
-                <form onSubmit={sendChat} className="flex gap-2 border-t p-2">
+                <form onSubmit={sendChat} className="relative flex gap-2 border-t p-2">
+                  {emojiOpen && (
+                    <div className="absolute bottom-full left-2 right-2 mb-2 grid grid-cols-8 gap-1 rounded-md border bg-popover p-2 shadow-lg z-10">
+                      {["😀","😂","😍","🥰","😎","🤔","😅","😢","😡","🥳","😴","🤯","😇","🙃","😉","😌","👍","👎","👏","🙌","🙏","💪","👀","🫶","❤️","🔥","✨","🎉","💯","✅","❌","⚠️","💡","🚀","⭐","🌟","💻","🐛","📌","📝"].map((e) => (
+                        <button
+                          key={e}
+                          type="button"
+                          onClick={() => { setChatDraft((d) => d + e); setEmojiOpen(false); }}
+                          className="rounded p-1 text-lg hover:bg-accent"
+                        >{e}</button>
+                      ))}
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setEmojiOpen((v) => !v)}
+                    className="inline-flex items-center rounded-md border px-2 py-1.5 text-sm hover:bg-accent"
+                    aria-label="Inserir emoji"
+                    title="Inserir emoji"
+                  >
+                    <Smile className="h-4 w-4" />
+                  </button>
                   <input value={chatDraft} onChange={(e) => setChatDraft(e.target.value)} placeholder="Escreva uma mensagem…" className="flex-1 rounded-md border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring" />
                   <button type="submit" className="inline-flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90"><Send className="h-3.5 w-3.5" /></button>
                 </form>
