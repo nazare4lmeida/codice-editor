@@ -154,7 +154,7 @@ export function CodeEditor({ value, path, onChange, disabled, placeholder }: Cod
     <CodeMirror
       value={value}
       onChange={onChange}
-      theme={theme === "dark" ? githubDark : githubLight}
+      theme={theme === "dark" ? dracula : vscodeLight}
       extensions={extensions}
       editable={!disabled}
       readOnly={disabled}
