@@ -26,6 +26,8 @@ import {
 import JSZip from "jszip";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { PalettePicker } from "@/components/palette-picker";
+import { CodeEditor } from "@/components/code-editor";
+
 
 export const Route = createFileRoute("/room/$code")({
   head: ({ params }) => ({
