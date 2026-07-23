@@ -909,6 +909,70 @@ function RoomPage() {
     broadcastPatch(activePath, "", true);
   }
 
+  async function exportProjectZip() {
+    const current = filesRef.current;
+    const zip = new JSZip();
+    for (const [path, content] of Object.entries(current)) {
+      zip.file(path, content);
+    }
+    const blob = await zip.generateAsync({ type: "blob" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `codice-sala-${code}.zip`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  async function importFiles(fileList: FileList | null) {
+    if (!fileList || fileList.length === 0) return;
+    if (!loadedRef.current) return;
+    const incoming: ProjectFiles = {};
+    for (const file of Array.from(fileList)) {
+      const lowerName = file.name.toLowerCase();
+      if (lowerName.endsWith(".zip")) {
+        try {
+          const zip = await JSZip.loadAsync(file);
+          const entries = Object.values(zip.files).filter((e) => !e.dir);
+          for (const entry of entries) {
+            const text = await entry.async("string");
+            const path = cleanPath(entry.name.replace(/^\/+/, ""));
+            if (path) incoming[path] = text;
+          }
+        } catch (e) {
+          window.alert(`Não foi possível ler o zip "${file.name}": ${(e as Error).message}`);
+        }
+      } else {
+        const text = await file.text();
+        const path = cleanPath(file.name);
+        if (path) incoming[path] = text;
+      }
+    }
+    const incomingPaths = Object.keys(incoming);
+    if (incomingPaths.length === 0) return;
+
+    const overlap = incomingPaths.filter((p) => filesRef.current[p] !== undefined);
+    if (overlap.length > 0) {
+      const ok = window.confirm(
+        `Isso vai sobrescrever ${overlap.length} arquivo(s) existente(s):\n\n${overlap.join("\n")}\n\nContinuar?`,
+      );
+      if (!ok) return;
+    }
+
+    const merged = normalizeFiles({ ...filesRef.current, ...incoming });
+    const nextActive =
+      merged["index.html"] !== undefined ? "index.html" : sortFiles(merged)[0] || activePathRef.current;
+    setFiles(merged);
+    setActivePath(nextActive);
+    schedulePersist(merged, nextActive);
+    for (const path of incomingPaths) {
+      broadcastPatch(path, merged[path]);
+    }
+  }
+
+
   function runRuntimeDiagnostics(project: ProjectFiles) {
     return new Promise<Diagnostic[]>((resolve) => {
       const found: Diagnostic[] = [];
