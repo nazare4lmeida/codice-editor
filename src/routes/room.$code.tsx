@@ -1141,6 +1141,7 @@ function RoomPage() {
             Preview
           </button>
 
+          <PalettePicker />
           <ThemeToggle />
         </div>
       </header>
