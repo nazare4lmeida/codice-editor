@@ -8,17 +8,17 @@ import { PalettePicker } from "@/components/palette-picker";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "CodeLive — Editor de código colaborativo para aulas" },
+      { title: "Codice — Workspace colaborativo de código para aulas" },
       {
         name: "description",
         content:
-          "Ensine programação com um editor de código ao vivo. Alunos e instrutor digitam no mesmo espaço e veem execuções em tempo real.",
+          "Codice é o workspace onde a turma programa junta: múltiplos arquivos, execução ao vivo e preview em tempo real, sem instalar nada.",
       },
-      { property: "og:title", content: "CodeLive — Editor de código colaborativo para aulas" },
+      { property: "og:title", content: "Codice — Workspace colaborativo de código para aulas" },
       {
         property: "og:description",
         content:
-          "Ensine programação com um editor de código ao vivo. Alunos e instrutor digitam no mesmo espaço e veem execuções em tempo real.",
+          "Codice é o workspace onde a turma programa junta: múltiplos arquivos, execução ao vivo e preview em tempo real, sem instalar nada.",
       },
     ],
   }),
@@ -45,7 +45,7 @@ function Landing() {
       const code = makeCode();
       const { error } = await supabase.from("rooms").insert({ code });
       if (error) throw error;
-      sessionStorage.setItem("codelive:name", displayName);
+      sessionStorage.setItem("codice:name", displayName);
       navigate({ to: "/room/$code", params: { code } });
     } catch (e) {
       setError((e as Error).message);
@@ -71,7 +71,7 @@ function Landing() {
         setError("Sala não encontrada.");
         return;
       }
-      sessionStorage.setItem("codelive:name", displayName);
+      sessionStorage.setItem("codice:name", displayName);
       navigate({ to: "/room/$code", params: { code } });
     } catch (e) {
       setError((e as Error).message);
@@ -88,7 +88,10 @@ function Landing() {
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground">
               <Code2 className="h-5 w-5" />
             </div>
-            <h1 className="text-xl font-semibold tracking-tight">CodeLive</h1>
+            <div>
+              <h1 className="text-xl font-semibold tracking-tight leading-none">Codice</h1>
+              <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Workspace de código</p>
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <PalettePicker />
@@ -99,13 +102,13 @@ function Landing() {
         <div className="grid gap-12 md:grid-cols-2 md:items-center">
           <div>
             <h2 className="text-4xl font-bold tracking-tight sm:text-5xl">
-              Ensine código escrevendo{" "}
-              <span className="text-primary">juntos</span>, ao vivo.
+              Um workspace onde a turma escreve código{" "}
+              <span className="text-primary">junta</span>, ao vivo.
             </h2>
             <p className="mt-4 text-muted-foreground">
-              Um editor JavaScript compartilhado onde toda a turma digita no mesmo
-              lugar, executa código isolado em sandbox e vê os resultados na hora.
-              Sem instalar nada. Sem login.
+              Codice é um workspace colaborativo com múltiplos arquivos, execução
+              isolada em sandbox e preview em tempo real. Toda a turma no mesmo
+              projeto, sem instalar nada, sem login.
             </p>
 
             <ul className="mt-8 space-y-3 text-sm">

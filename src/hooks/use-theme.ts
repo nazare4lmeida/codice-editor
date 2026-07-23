@@ -10,8 +10,8 @@ export const PALETTES: { id: Palette; name: string; swatches: string[] }[] = [
   { id: "forest", name: "Floresta Profunda", swatches: ["#050e13", "#14352f", "#5e8a75", "#92b2a2"] },
 ];
 
-const THEME_KEY = "codelive:theme";
-const PALETTE_KEY = "codelive:palette";
+const THEME_KEY = "codice:theme";
+const PALETTE_KEY = "codice:palette";
 
 function readInitialTheme(): Theme {
   if (typeof window === "undefined") return "light";

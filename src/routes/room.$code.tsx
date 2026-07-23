@@ -6,6 +6,7 @@ import {
   ArrowLeft,
   CheckCircle2,
   Copy,
+  Download,
   Eye,
   FileCode,
   Layout,
@@ -16,18 +17,20 @@ import {
   Send,
   Terminal,
   Trash2,
+  Upload,
   Users,
   X,
   XCircle,
   Pencil,
 } from "lucide-react";
+import JSZip from "jszip";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { PalettePicker } from "@/components/palette-picker";
 
 export const Route = createFileRoute("/room/$code")({
   head: ({ params }) => ({
     meta: [
-      { title: `Sala ${params.code} — CodeLive` },
+      { title: `Sala ${params.code} — Codice` },
       {
         name: "description",
         content: "Editor colaborativo ao vivo para aulas.",
@@ -243,7 +246,7 @@ function serializeProject(files: ProjectFiles, activePath: string) {
 }
 
 function getDraftKey(code: string) {
-  return `codelive:room:${code}:draft:v2`;
+  return `codice:room:${code}:draft:v2`;
 }
 
 function readDraftCache(code: string): RoomDraftCache | null {
@@ -283,7 +286,7 @@ function writeDraftCache(code: string, files: ProjectFiles, activePath: string) 
 }
 
 function getChatKey(code: string) {
-  return `codelive:room:${code}:chat:v1`;
+  return `codice:room:${code}:chat:v1`;
 }
 
 function readChatCache(code: string): ChatMsg[] {
@@ -532,7 +535,7 @@ function RoomPage() {
   const me = useMemo<Participant>(() => {
     const id = randomId();
     const name =
-      (typeof window !== "undefined" && sessionStorage.getItem("codelive:name")) ||
+      (typeof window !== "undefined" && (sessionStorage.getItem("codice:name") || sessionStorage.getItem("codelive:name"))) ||
       "Convidado";
     return { id, name, color: pickColor(id) };
   }, []);
@@ -546,6 +549,7 @@ function RoomPage() {
   const loadedRef = useRef(false);
   const dirtyRef = useRef(false);
   const lastEditingSentAtRef = useRef(0);
+  const importInputRef = useRef<HTMLInputElement | null>(null);
   const editingCleanupRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const orderedPaths = useMemo(() => sortFiles(files), [files]);
@@ -906,6 +910,70 @@ function RoomPage() {
     broadcastPatch(activePath, "", true);
   }
 
+  async function exportProjectZip() {
+    const current = filesRef.current;
+    const zip = new JSZip();
+    for (const [path, content] of Object.entries(current)) {
+      zip.file(path, content);
+    }
+    const blob = await zip.generateAsync({ type: "blob" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `codice-sala-${code}.zip`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  async function importFiles(fileList: FileList | null) {
+    if (!fileList || fileList.length === 0) return;
+    if (!loadedRef.current) return;
+    const incoming: ProjectFiles = {};
+    for (const file of Array.from(fileList)) {
+      const lowerName = file.name.toLowerCase();
+      if (lowerName.endsWith(".zip")) {
+        try {
+          const zip = await JSZip.loadAsync(file);
+          const entries = Object.values(zip.files).filter((e) => !e.dir);
+          for (const entry of entries) {
+            const text = await entry.async("string");
+            const path = cleanPath(entry.name.replace(/^\/+/, ""));
+            if (path) incoming[path] = text;
+          }
+        } catch (e) {
+          window.alert(`Não foi possível ler o zip "${file.name}": ${(e as Error).message}`);
+        }
+      } else {
+        const text = await file.text();
+        const path = cleanPath(file.name);
+        if (path) incoming[path] = text;
+      }
+    }
+    const incomingPaths = Object.keys(incoming);
+    if (incomingPaths.length === 0) return;
+
+    const overlap = incomingPaths.filter((p) => filesRef.current[p] !== undefined);
+    if (overlap.length > 0) {
+      const ok = window.confirm(
+        `Isso vai sobrescrever ${overlap.length} arquivo(s) existente(s):\n\n${overlap.join("\n")}\n\nContinuar?`,
+      );
+      if (!ok) return;
+    }
+
+    const merged = normalizeFiles({ ...filesRef.current, ...incoming });
+    const nextActive =
+      merged["index.html"] !== undefined ? "index.html" : sortFiles(merged)[0] || activePathRef.current;
+    setFiles(merged);
+    setActivePath(nextActive);
+    schedulePersist(merged, nextActive);
+    for (const path of incomingPaths) {
+      broadcastPatch(path, merged[path]);
+    }
+  }
+
+
   function runRuntimeDiagnostics(project: ProjectFiles) {
     return new Promise<Diagnostic[]>((resolve) => {
       const found: Diagnostic[] = [];
@@ -1195,6 +1263,36 @@ function RoomPage() {
               <span>{languageLabel(activePath)}</span>
               <span>·</span>
               <span>{lineCount} linhas</span>
+              <span className="mx-1 h-4 w-px bg-border" />
+              <input
+                ref={importInputRef}
+                type="file"
+                multiple
+                accept=".zip,.html,.htm,.css,.js,.mjs,.json,.svg,.md,.txt,.ts,.tsx,.jsx"
+                className="hidden"
+                onChange={(e) => {
+                  void importFiles(e.target.files);
+                  e.target.value = "";
+                }}
+              />
+              <button
+                onClick={() => importInputRef.current?.click()}
+                disabled={!loaded}
+                className="inline-flex items-center gap-1 rounded p-1 hover:bg-accent disabled:opacity-60"
+                aria-label="Importar arquivos ou zip"
+                title="Importar arquivos ou .zip"
+              >
+                <Upload className="h-3.5 w-3.5" />
+              </button>
+              <button
+                onClick={() => void exportProjectZip()}
+                disabled={!loaded}
+                className="inline-flex items-center gap-1 rounded p-1 hover:bg-accent disabled:opacity-60"
+                aria-label="Exportar projeto como .zip"
+                title="Exportar projeto como .zip"
+              >
+                <Download className="h-3.5 w-3.5" />
+              </button>
               {orderedPaths.length > 1 && (
                 <button onClick={deleteActiveFile} disabled={!loaded} className="rounded p-1 hover:bg-accent disabled:opacity-60" aria-label="Excluir arquivo ativo" title="Excluir arquivo ativo">
                   <Trash2 className="h-3.5 w-3.5" />
