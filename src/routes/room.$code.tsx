@@ -532,7 +532,7 @@ function RoomPage() {
   const me = useMemo<Participant>(() => {
     const id = randomId();
     const name =
-      (typeof window !== "undefined" && sessionStorage.getItem("codelive:name")) ||
+      (typeof window !== "undefined" && (sessionStorage.getItem("codice:name") || sessionStorage.getItem("codelive:name"))) ||
       "Convidado";
     return { id, name, color: pickColor(id) };
   }, []);
