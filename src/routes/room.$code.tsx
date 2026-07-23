@@ -21,6 +21,7 @@ import {
   XCircle,
   Pencil,
 } from "lucide-react";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export const Route = createFileRoute("/room/$code")({
   head: ({ params }) => ({
