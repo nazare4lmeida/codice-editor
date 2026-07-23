@@ -545,6 +545,15 @@ function RoomPage() {
     return Number.isFinite(v) && v >= 240 ? v : 320;
   });
   const [emojiOpen, setEmojiOpen] = useState(false);
+  const [isDesktop, setIsDesktop] = useState<boolean>(() => typeof window !== "undefined" && window.matchMedia("(min-width: 1024px)").matches);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mql = window.matchMedia("(min-width: 1024px)");
+    const handler = (e: MediaQueryListEvent) => setIsDesktop(e.matches);
+    mql.addEventListener("change", handler);
+    return () => mql.removeEventListener("change", handler);
+  }, []);
 
   useEffect(() => {
     try { localStorage.setItem("codice:layout:output", String(outputWidth)); } catch {}
