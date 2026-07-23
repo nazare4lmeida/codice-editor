@@ -281,6 +281,63 @@ function writeDraftCache(code: string, files: ProjectFiles, activePath: string) 
   }
 }
 
+function getChatKey(code: string) {
+  return `codelive:room:${code}:chat:v1`;
+}
+
+function readChatCache(code: string): ChatMsg[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(getChatKey(code));
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) return parsed.slice(-200) as ChatMsg[];
+  } catch {
+    /* ignore */
+  }
+  return [];
+}
+
+function writeChatCache(code: string, chat: ChatMsg[]) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(getChatKey(code), JSON.stringify(chat.slice(-200)));
+  } catch {
+    /* ignore */
+  }
+}
+
+const CSS_NAMED_COLORS = new Set([
+  "black","white","red","green","blue","yellow","cyan","magenta","gray","grey",
+  "orange","purple","pink","brown","lime","navy","teal","olive","maroon","silver",
+  "gold","indigo","violet","aqua","fuchsia","coral","salmon","khaki","turquoise",
+  "tomato","tan","plum","orchid","crimson","chocolate","beige","azure","ivory",
+  "lavender","wheat","snow","transparent",
+]);
+
+interface ColorHit { raw: string; display: string; index: number; }
+
+function extractColors(css: string): ColorHit[] {
+  const hits: ColorHit[] = [];
+  const seen = new Set<string>();
+  const push = (raw: string, display: string, index: number) => {
+    const key = display.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    hits.push({ raw, display, index });
+  };
+  const hexRe = /#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})\b/g;
+  let m: RegExpExecArray | null;
+  while ((m = hexRe.exec(css))) push(m[0], m[0], m.index);
+  const fnRe = /(rgba?|hsla?)\s*\([^)]+\)/gi;
+  while ((m = fnRe.exec(css))) push(m[0], m[0], m.index);
+  const nameRe = /\b([a-zA-Z]+)\b/g;
+  while ((m = nameRe.exec(css))) {
+    const name = m[1].toLowerCase();
+    if (CSS_NAMED_COLORS.has(name)) push(m[1], name, m.index);
+  }
+  return hits.slice(0, 24);
+
 function escapeScript(content: string) {
   return content.replace(/<\/script/gi, "<\\/script");
 }
