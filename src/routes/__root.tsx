@@ -81,26 +81,27 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       {
         name: "description",
         content:
-          "Codice é um workspace de código ao vivo: alunos e instrutor programam juntos no mesmo projeto, executam e visualizam o resultado em tempo real.",
+          "Codice é o workspace onde a turma programa junta: múltiplos arquivos, execução ao vivo e preview em tempo real, sem instalar nada.",
       },
       { property: "og:title", content: "Codice — Workspace colaborativo de código para aulas" },
       {
         property: "og:description",
         content:
-          "Codice é um workspace de código ao vivo: alunos e instrutor programam juntos no mesmo projeto, executam e visualizam o resultado em tempo real.",
+          "Codice é o workspace onde a turma programa junta: múltiplos arquivos, execução ao vivo e preview em tempo real, sem instalar nada.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:title", content: "Codice — Workspace colaborativo de código para aulas" },
-      { name: "twitter:description", content: "Codice é um workspace de código ao vivo: alunos e instrutor programam juntos no mesmo projeto, executam e visualizam o resultado em tempo real." },
-      { property: "og:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/attachments/og-images/1fac3f4c-9b8f-4d14-be53-fe0d29869842" },
-      { name: "twitter:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/attachments/og-images/1fac3f4c-9b8f-4d14-be53-fe0d29869842" },
+      { name: "twitter:description", content: "Codice é o workspace onde a turma programa junta: múltiplos arquivos, execução ao vivo e preview em tempo real, sem instalar nada." },
+      { property: "og:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/attachments/og-images/daf7cd61-4ceb-42cc-8da6-30b4568087ce" },
+      { name: "twitter:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/attachments/og-images/daf7cd61-4ceb-42cc-8da6-30b4568087ce" },
     ],
     links: [
       {
         rel: "stylesheet",
         href: appCss,
       },
+      { rel: "icon", type: "image/x-icon", href: "/favicon.ico" },
     ],
   }),
   shellComponent: RootShell,
