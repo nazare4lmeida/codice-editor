@@ -337,6 +337,8 @@ function extractColors(css: string): ColorHit[] {
     if (CSS_NAMED_COLORS.has(name)) push(m[1], name, m.index);
   }
   return hits.slice(0, 24);
+}
+
 
 function escapeScript(content: string) {
   return content.replace(/<\/script/gi, "<\\/script");
