@@ -102,13 +102,13 @@ function Landing() {
         <div className="grid gap-12 md:grid-cols-2 md:items-center">
           <div>
             <h2 className="text-4xl font-bold tracking-tight sm:text-5xl">
-              Ensine código escrevendo{" "}
-              <span className="text-primary">juntos</span>, ao vivo.
+              Um workspace onde a turma escreve código{" "}
+              <span className="text-primary">junta</span>, ao vivo.
             </h2>
             <p className="mt-4 text-muted-foreground">
-              Um editor JavaScript compartilhado onde toda a turma digita no mesmo
-              lugar, executa código isolado em sandbox e vê os resultados na hora.
-              Sem instalar nada. Sem login.
+              Codice é um workspace colaborativo com múltiplos arquivos, execução
+              isolada em sandbox e preview em tempo real. Toda a turma no mesmo
+              projeto, sem instalar nada, sem login.
             </p>
 
             <ul className="mt-8 space-y-3 text-sm">
