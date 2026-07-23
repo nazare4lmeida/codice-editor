@@ -90,7 +90,10 @@ function Landing() {
             </div>
             <h1 className="text-xl font-semibold tracking-tight">CodeLive</h1>
           </div>
-          <ThemeToggle />
+          <div className="flex items-center gap-2">
+            <PalettePicker />
+            <ThemeToggle />
+          </div>
         </header>
 
         <div className="grid gap-12 md:grid-cols-2 md:items-center">
