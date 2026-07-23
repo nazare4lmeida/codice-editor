@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Code2, Users, Zap } from "lucide-react";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -81,11 +82,14 @@ function Landing() {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <div className="mx-auto max-w-5xl px-6 py-16">
-        <header className="mb-14 flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-            <Code2 className="h-5 w-5" />
+        <header className="mb-14 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+              <Code2 className="h-5 w-5" />
+            </div>
+            <h1 className="text-xl font-semibold tracking-tight">CodeLive</h1>
           </div>
-          <h1 className="text-xl font-semibold tracking-tight">CodeLive</h1>
+          <ThemeToggle />
         </header>
 
         <div className="grid gap-12 md:grid-cols-2 md:items-center">
