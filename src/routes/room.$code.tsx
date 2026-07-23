@@ -1385,7 +1385,7 @@ function RoomPage() {
         </section>
 
         {sidePanel !== "none" && (
-          <aside className="flex max-h-[70vh] w-full flex-col border-t bg-card lg:sticky lg:top-0 lg:h-screen lg:max-h-screen lg:w-80 lg:self-start lg:border-l lg:border-t-0">
+          <aside className="flex max-h-[70vh] w-full flex-col border-t bg-card lg:h-full lg:max-h-none lg:w-80 lg:border-l lg:border-t-0">
             <div className="flex items-center justify-between border-b px-3 py-2 text-sm font-semibold">
               <span>{sidePanel === "people" ? `Participantes (${participants.length})` : "Chat da sala"}</span>
               <button onClick={() => setSidePanel("none")} className="rounded p-1 hover:bg-accent" aria-label="Fechar"><X className="h-4 w-4" /></button>
