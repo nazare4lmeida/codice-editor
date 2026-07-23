@@ -1494,7 +1494,28 @@ function RoomPage() {
                     </div>
                   ))}
                 </div>
-                <form onSubmit={sendChat} className="flex gap-2 border-t p-2">
+                <form onSubmit={sendChat} className="relative flex gap-2 border-t p-2">
+                  {emojiOpen && (
+                    <div className="absolute bottom-full left-2 right-2 mb-2 grid grid-cols-8 gap-1 rounded-md border bg-popover p-2 shadow-lg z-10">
+                      {["😀","😂","😍","🥰","😎","🤔","😅","😢","😡","🥳","😴","🤯","😇","🙃","😉","😌","👍","👎","👏","🙌","🙏","💪","👀","🫶","❤️","🔥","✨","🎉","💯","✅","❌","⚠️","💡","🚀","⭐","🌟","💻","🐛","📌","📝"].map((e) => (
+                        <button
+                          key={e}
+                          type="button"
+                          onClick={() => { setChatDraft((d) => d + e); setEmojiOpen(false); }}
+                          className="rounded p-1 text-lg hover:bg-accent"
+                        >{e}</button>
+                      ))}
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setEmojiOpen((v) => !v)}
+                    className="inline-flex items-center rounded-md border px-2 py-1.5 text-sm hover:bg-accent"
+                    aria-label="Inserir emoji"
+                    title="Inserir emoji"
+                  >
+                    <Smile className="h-4 w-4" />
+                  </button>
                   <input value={chatDraft} onChange={(e) => setChatDraft(e.target.value)} placeholder="Escreva uma mensagem…" className="flex-1 rounded-md border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring" />
                   <button type="submit" className="inline-flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90"><Send className="h-3.5 w-3.5" /></button>
                 </form>
