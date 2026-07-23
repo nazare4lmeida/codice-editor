@@ -1295,52 +1295,12 @@ function RoomPage() {
               )}
             </div>
           </div>
-          {colorHits.length > 0 && (
-            <div className="flex flex-wrap items-center gap-1.5 border-b bg-muted/20 px-3 py-1.5 text-[11px] text-muted-foreground">
-              <span className="mr-1 uppercase tracking-wider">Cores</span>
-              {colorHits.map((hit, i) => (
-                <button
-                  key={`${hit.display}-${i}`}
-                  type="button"
-                  onClick={() => {
-                    const el = editorRef.current;
-                    if (!el) return;
-                    el.focus();
-                    el.setSelectionRange(hit.index, hit.index + hit.raw.length);
-                  }}
-                  className="inline-flex items-center gap-1 rounded border bg-background px-1.5 py-0.5 font-mono hover:bg-accent"
-                  title={`Selecionar ${hit.display}`}
-                >
-                  <span
-                    className="h-3 w-3 rounded-sm border border-border"
-                    style={{ backgroundColor: hit.display }}
-                  />
-                  {hit.display}
-                </button>
-              ))}
-            </div>
-          )}
-          <div className="relative flex flex-1 overflow-hidden">
-            <div
-              ref={gutterRef}
-              aria-hidden
-              className="select-none overflow-hidden border-r bg-muted/30 py-4 pl-3 pr-2 text-right font-mono text-xs leading-6 text-muted-foreground"
-              style={{ minWidth: `${Math.max(2, String(lineCount).length) + 1}ch` }}
-            >
-              {Array.from({ length: lineCount }, (_, i) => (
-                <div key={i}>{i + 1}</div>
-              ))}
-            </div>
-            <textarea
-              ref={editorRef}
+          <div className="relative flex flex-1 overflow-hidden bg-background">
+            <CodeEditor
               value={currentValue}
-              onChange={(e) => updateFile(activePath, e.target.value)}
-              onScroll={(e) => {
-                if (gutterRef.current) gutterRef.current.scrollTop = e.currentTarget.scrollTop;
-              }}
+              path={activePath}
+              onChange={(v) => updateFile(activePath, v)}
               disabled={!loaded}
-              spellCheck={false}
-              className="h-full flex-1 resize-none border-0 bg-background p-4 font-mono text-sm leading-6 outline-none disabled:cursor-wait disabled:opacity-60"
               placeholder={loaded ? `${languageLabel(activePath)}…` : "Carregando sala…"}
             />
             {!loaded && (
@@ -1349,6 +1309,7 @@ function RoomPage() {
               </div>
             )}
           </div>
+
         </section>
 
         <section className="flex min-h-[35vh] w-full flex-col bg-card lg:w-[46%]">
