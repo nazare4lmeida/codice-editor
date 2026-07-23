@@ -283,7 +283,7 @@ function writeDraftCache(code: string, files: ProjectFiles, activePath: string) 
 }
 
 function getChatKey(code: string) {
-  return `codelive:room:${code}:chat:v1`;
+  return `codice:room:${code}:chat:v1`;
 }
 
 function readChatCache(code: string): ChatMsg[] {
