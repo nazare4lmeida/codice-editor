@@ -77,22 +77,22 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "CodeLive — Editor de código colaborativo para aulas" },
+      { title: "Codice — Workspace colaborativo de código para aulas" },
       {
         name: "description",
         content:
-          "Ensine programação com um editor de código ao vivo. Alunos e instrutor digitam no mesmo espaço e veem execuções em tempo real.",
+          "Codice é um workspace de código ao vivo: alunos e instrutor programam juntos no mesmo projeto, executam e visualizam o resultado em tempo real.",
       },
-      { property: "og:title", content: "CodeLive — Editor de código colaborativo para aulas" },
+      { property: "og:title", content: "Codice — Workspace colaborativo de código para aulas" },
       {
         property: "og:description",
         content:
-          "Ensine programação com um editor de código ao vivo. Alunos e instrutor digitam no mesmo espaço e veem execuções em tempo real.",
+          "Codice é um workspace de código ao vivo: alunos e instrutor programam juntos no mesmo projeto, executam e visualizam o resultado em tempo real.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:title", content: "CodeLive — Editor de código colaborativo para aulas" },
-      { name: "twitter:description", content: "Ensine programação com um editor de código ao vivo. Alunos e instrutor digitam no mesmo espaço e veem execuções em tempo real." },
+      { name: "twitter:title", content: "Codice — Workspace colaborativo de código para aulas" },
+      { name: "twitter:description", content: "Codice é um workspace de código ao vivo: alunos e instrutor programam juntos no mesmo projeto, executam e visualizam o resultado em tempo real." },
       { property: "og:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/attachments/og-images/1fac3f4c-9b8f-4d14-be53-fe0d29869842" },
       { name: "twitter:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/attachments/og-images/1fac3f4c-9b8f-4d14-be53-fe0d29869842" },
     ],
