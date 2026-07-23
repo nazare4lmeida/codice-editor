@@ -243,7 +243,7 @@ function serializeProject(files: ProjectFiles, activePath: string) {
 }
 
 function getDraftKey(code: string) {
-  return `codelive:room:${code}:draft:v2`;
+  return `codice:room:${code}:draft:v2`;
 }
 
 function readDraftCache(code: string): RoomDraftCache | null {
