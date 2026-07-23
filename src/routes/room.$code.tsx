@@ -556,12 +556,7 @@ function RoomPage() {
   const currentValue = files[activePath] ?? "";
   const lineCount = currentValue ? currentValue.split("\n").length : 1;
   const errorCount = diagnostics?.length ?? 0;
-  const colorHits = useMemo(
-    () => (fileKind(activePath) === "css" ? extractColors(currentValue) : []),
-    [activePath, currentValue],
-  );
-  const editorRef = useRef<HTMLTextAreaElement | null>(null);
-  const gutterRef = useRef<HTMLDivElement | null>(null);
+
 
   useEffect(() => {
     writeChatCache(code, chat);
