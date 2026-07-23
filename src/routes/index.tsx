@@ -8,17 +8,17 @@ import { PalettePicker } from "@/components/palette-picker";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "CodeLive — Editor de código colaborativo para aulas" },
+      { title: "Codice — Workspace colaborativo de código para aulas" },
       {
         name: "description",
         content:
-          "Ensine programação com um editor de código ao vivo. Alunos e instrutor digitam no mesmo espaço e veem execuções em tempo real.",
+          "Codice é o workspace onde a turma programa junta: múltiplos arquivos, execução ao vivo e preview em tempo real, sem instalar nada.",
       },
-      { property: "og:title", content: "CodeLive — Editor de código colaborativo para aulas" },
+      { property: "og:title", content: "Codice — Workspace colaborativo de código para aulas" },
       {
         property: "og:description",
         content:
-          "Ensine programação com um editor de código ao vivo. Alunos e instrutor digitam no mesmo espaço e veem execuções em tempo real.",
+          "Codice é o workspace onde a turma programa junta: múltiplos arquivos, execução ao vivo e preview em tempo real, sem instalar nada.",
       },
     ],
   }),
