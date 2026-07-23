@@ -71,7 +71,7 @@ function Landing() {
         setError("Sala não encontrada.");
         return;
       }
-      sessionStorage.setItem("codelive:name", displayName);
+      sessionStorage.setItem("codice:name", displayName);
       navigate({ to: "/room/$code", params: { code } });
     } catch (e) {
       setError((e as Error).message);
