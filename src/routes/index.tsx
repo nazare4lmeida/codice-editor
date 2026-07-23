@@ -45,7 +45,7 @@ function Landing() {
       const code = makeCode();
       const { error } = await supabase.from("rooms").insert({ code });
       if (error) throw error;
-      sessionStorage.setItem("codelive:name", displayName);
+      sessionStorage.setItem("codice:name", displayName);
       navigate({ to: "/room/$code", params: { code } });
     } catch (e) {
       setError((e as Error).message);
