@@ -534,6 +534,46 @@ function RoomPage() {
   const [addingFile, setAddingFile] = useState(false);
   const [newFileName, setNewFileName] = useState("");
   const [editing, setEditing] = useState<Record<string, EditingInfo>>({});
+  const [outputWidth, setOutputWidth] = useState<number>(() => {
+    if (typeof window === "undefined") return 560;
+    const v = Number(localStorage.getItem("codice:layout:output"));
+    return Number.isFinite(v) && v >= 240 ? v : 560;
+  });
+  const [asideWidth, setAsideWidth] = useState<number>(() => {
+    if (typeof window === "undefined") return 320;
+    const v = Number(localStorage.getItem("codice:layout:aside"));
+    return Number.isFinite(v) && v >= 240 ? v : 320;
+  });
+  const [emojiOpen, setEmojiOpen] = useState(false);
+
+  useEffect(() => {
+    try { localStorage.setItem("codice:layout:output", String(outputWidth)); } catch {}
+  }, [outputWidth]);
+  useEffect(() => {
+    try { localStorage.setItem("codice:layout:aside", String(asideWidth)); } catch {}
+  }, [asideWidth]);
+
+  const startResize = useCallback((getCurrent: () => number, setter: (n: number) => void, min: number, max: number) => (e: React.PointerEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const start = getCurrent();
+    const onMove = (ev: PointerEvent) => {
+      // dragging left => grow (panel is on the right side of the handle)
+      const delta = startX - ev.clientX;
+      const next = Math.min(max, Math.max(min, start + delta));
+      setter(next);
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  }, []);
 
   const me = useMemo<Participant>(() => {
     const id = randomId();
