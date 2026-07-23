@@ -1376,7 +1376,7 @@ function RoomPage() {
 
         <section
           className="flex min-h-[35vh] w-full flex-col bg-card lg:min-h-0 lg:shrink-0"
-          style={{ width: typeof window !== "undefined" && window.innerWidth >= 1024 ? outputWidth : undefined }}
+          style={{ width: isDesktop ? outputWidth : undefined }}
         >
           <div className="flex items-center justify-between border-b bg-muted/40 px-3 py-1.5 text-xs">
             <div className="flex items-center gap-1">
