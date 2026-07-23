@@ -1262,6 +1262,36 @@ function RoomPage() {
               <span>{languageLabel(activePath)}</span>
               <span>·</span>
               <span>{lineCount} linhas</span>
+              <span className="mx-1 h-4 w-px bg-border" />
+              <input
+                ref={importInputRef}
+                type="file"
+                multiple
+                accept=".zip,.html,.htm,.css,.js,.mjs,.json,.svg,.md,.txt,.ts,.tsx,.jsx"
+                className="hidden"
+                onChange={(e) => {
+                  void importFiles(e.target.files);
+                  e.target.value = "";
+                }}
+              />
+              <button
+                onClick={() => importInputRef.current?.click()}
+                disabled={!loaded}
+                className="inline-flex items-center gap-1 rounded p-1 hover:bg-accent disabled:opacity-60"
+                aria-label="Importar arquivos ou zip"
+                title="Importar arquivos ou .zip"
+              >
+                <Upload className="h-3.5 w-3.5" />
+              </button>
+              <button
+                onClick={() => void exportProjectZip()}
+                disabled={!loaded}
+                className="inline-flex items-center gap-1 rounded p-1 hover:bg-accent disabled:opacity-60"
+                aria-label="Exportar projeto como .zip"
+                title="Exportar projeto como .zip"
+              >
+                <Download className="h-3.5 w-3.5" />
+              </button>
               {orderedPaths.length > 1 && (
                 <button onClick={deleteActiveFile} disabled={!loaded} className="rounded p-1 hover:bg-accent disabled:opacity-60" aria-label="Excluir arquivo ativo" title="Excluir arquivo ativo">
                   <Trash2 className="h-3.5 w-3.5" />
