@@ -1157,7 +1157,7 @@ function RoomPage() {
   );
 
   return (
-    <div className="flex min-h-screen flex-col bg-background text-foreground">
+    <div className="flex min-h-screen flex-col bg-background text-foreground lg:h-screen lg:min-h-0 lg:overflow-hidden">
       <header className="flex flex-wrap items-center justify-between gap-3 border-b bg-card px-4 py-3">
         <div className="flex items-center gap-3">
           <Link to="/" className="flex h-8 w-8 items-center justify-center rounded-md border hover:bg-accent" aria-label="Voltar">
