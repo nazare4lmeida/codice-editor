@@ -3,6 +3,7 @@ import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Code2, Users, Zap } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { PalettePicker } from "@/components/palette-picker";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -89,7 +90,10 @@ function Landing() {
             </div>
             <h1 className="text-xl font-semibold tracking-tight">CodeLive</h1>
           </div>
-          <ThemeToggle />
+          <div className="flex items-center gap-2">
+            <PalettePicker />
+            <ThemeToggle />
+          </div>
         </header>
 
         <div className="grid gap-12 md:grid-cols-2 md:items-center">

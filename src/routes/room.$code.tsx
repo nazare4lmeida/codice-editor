@@ -22,6 +22,7 @@ import {
   Pencil,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { PalettePicker } from "@/components/palette-picker";
 
 export const Route = createFileRoute("/room/$code")({
   head: ({ params }) => ({
@@ -1140,6 +1141,7 @@ function RoomPage() {
             Preview
           </button>
 
+          <PalettePicker />
           <ThemeToggle />
         </div>
       </header>
