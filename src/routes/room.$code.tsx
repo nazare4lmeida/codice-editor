@@ -1157,7 +1157,7 @@ function RoomPage() {
   );
 
   return (
-    <div className="flex min-h-screen flex-col bg-background text-foreground">
+    <div className="flex min-h-screen flex-col bg-background text-foreground lg:h-screen lg:min-h-0 lg:overflow-hidden">
       <header className="flex flex-wrap items-center justify-between gap-3 border-b bg-card px-4 py-3">
         <div className="flex items-center gap-3">
           <Link to="/" className="flex h-8 w-8 items-center justify-center rounded-md border hover:bg-accent" aria-label="Voltar">
@@ -1225,9 +1225,9 @@ function RoomPage() {
         </div>
       )}
 
-      <main className="flex flex-1 flex-col lg:flex-row">
+      <main className="flex flex-1 flex-col lg:min-h-0 lg:flex-row">
 
-        <section className="flex min-h-[50vh] flex-1 flex-col border-b lg:border-b-0 lg:border-r">
+        <section className="flex min-h-[50vh] flex-1 flex-col border-b lg:min-h-0 lg:min-w-0 lg:border-b-0 lg:border-r">
           <div className="flex items-center gap-0 overflow-x-auto border-b bg-muted/40 text-xs">
             {orderedPaths.map((path) => (
               <button key={path} disabled={!loaded} onClick={() => setActivePath(path)} className={`inline-flex shrink-0 items-center gap-1.5 border-r px-3 py-2 disabled:opacity-60 ${activePath === path ? "bg-background font-medium text-foreground" : "text-muted-foreground hover:bg-accent"}`}>
@@ -1314,7 +1314,7 @@ function RoomPage() {
 
         </section>
 
-        <section className="flex min-h-[35vh] w-full flex-col bg-card lg:w-[46%]">
+        <section className="flex min-h-[35vh] w-full flex-col bg-card lg:min-h-0 lg:w-[46%]">
           <div className="flex items-center justify-between border-b bg-muted/40 px-3 py-1.5 text-xs">
             <div className="flex items-center gap-1">
               <button onClick={() => setActiveTab("validate")} className={`inline-flex items-center gap-1.5 rounded px-2 py-1 ${activeTab === "validate" ? "bg-background font-medium text-foreground shadow-sm" : "text-muted-foreground hover:bg-accent"}`}>
@@ -1385,7 +1385,7 @@ function RoomPage() {
         </section>
 
         {sidePanel !== "none" && (
-          <aside className="flex max-h-[70vh] w-full flex-col border-t bg-card lg:sticky lg:top-0 lg:h-screen lg:max-h-screen lg:w-80 lg:self-start lg:border-l lg:border-t-0">
+          <aside className="flex max-h-[70vh] w-full flex-col border-t bg-card lg:h-full lg:max-h-none lg:w-80 lg:border-l lg:border-t-0">
             <div className="flex items-center justify-between border-b px-3 py-2 text-sm font-semibold">
               <span>{sidePanel === "people" ? `Participantes (${participants.length})` : "Chat da sala"}</span>
               <button onClick={() => setSidePanel("none")} className="rounded p-1 hover:bg-accent" aria-label="Fechar"><X className="h-4 w-4" /></button>
