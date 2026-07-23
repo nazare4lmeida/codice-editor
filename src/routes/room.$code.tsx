@@ -15,6 +15,7 @@ import {
   Plus,
   Save,
   Send,
+  Smile,
   Terminal,
   Trash2,
   Upload,
