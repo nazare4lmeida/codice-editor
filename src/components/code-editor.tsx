@@ -5,9 +5,8 @@ import { html } from "@codemirror/lang-html";
 import { css } from "@codemirror/lang-css";
 import { javascript } from "@codemirror/lang-javascript";
 import { json } from "@codemirror/lang-json";
-import { dracula } from "@uiw/codemirror-theme-dracula";
-import { vscodeLight } from "@uiw/codemirror-theme-vscode";
 import { useTheme } from "@/hooks/use-theme";
+import { getEditorTheme } from "@/lib/editor-themes";
 
 /* ---------- color swatch decoration ---------- */
 
@@ -133,7 +132,8 @@ export interface CodeEditorProps {
 }
 
 export function CodeEditor({ value, path, onChange, disabled, placeholder }: CodeEditorProps) {
-  const { theme } = useTheme();
+  const { theme, palette } = useTheme();
+  const editorTheme = useMemo(() => getEditorTheme(palette, theme), [palette, theme]);
   const extensions = useMemo(() => {
     const exts: Extension[] = [
       EditorView.lineWrapping,
@@ -154,7 +154,7 @@ export function CodeEditor({ value, path, onChange, disabled, placeholder }: Cod
     <CodeMirror
       value={value}
       onChange={onChange}
-      theme={theme === "dark" ? dracula : vscodeLight}
+      theme={editorTheme}
       extensions={extensions}
       editable={!disabled}
       readOnly={disabled}
