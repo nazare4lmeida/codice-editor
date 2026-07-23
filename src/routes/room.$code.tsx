@@ -521,7 +521,7 @@ function RoomPage() {
     { level: "log" | "error" | "warn" | "info"; parts: string[]; at: number }[]
   >([]);
   const [sidePanel, setSidePanel] = useState<SidePanel>("none");
-  const [chat, setChat] = useState<ChatMsg[]>([]);
+  const [chat, setChat] = useState<ChatMsg[]>(() => readChatCache(code));
   const [chatDraft, setChatDraft] = useState("");
   const [unreadChat, setUnreadChat] = useState(0);
   const [addingFile, setAddingFile] = useState(false);
@@ -551,6 +551,16 @@ function RoomPage() {
   const currentValue = files[activePath] ?? "";
   const lineCount = currentValue ? currentValue.split("\n").length : 1;
   const errorCount = diagnostics?.length ?? 0;
+  const colorHits = useMemo(
+    () => (fileKind(activePath) === "css" ? extractColors(currentValue) : []),
+    [activePath, currentValue],
+  );
+  const editorRef = useRef<HTMLTextAreaElement | null>(null);
+  const gutterRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    writeChatCache(code, chat);
+  }, [code, chat]);
 
   useEffect(() => {
     filesRef.current = files;
