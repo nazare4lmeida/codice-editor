@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useCallback, useSyncExternalStore } from "react";
 
 export type Theme = "light" | "dark";
 export type Palette = "default" | "rose" | "ocean" | "forest";
@@ -42,37 +42,83 @@ function applyPalette(palette: Palette) {
   else root.setAttribute("data-palette", palette);
 }
 
+/* -------- shared store -------- */
+
+type State = { theme: Theme; palette: Palette };
+
+let state: State =
+  typeof window === "undefined"
+    ? { theme: "light", palette: "default" }
+    : { theme: readInitialTheme(), palette: readInitialPalette() };
+
+if (typeof window !== "undefined") {
+  applyTheme(state.theme);
+  applyPalette(state.palette);
+}
+
+const listeners = new Set<() => void>();
+
+function emit() {
+  for (const l of listeners) l();
+}
+
+function subscribe(cb: () => void) {
+  listeners.add(cb);
+  return () => listeners.delete(cb);
+}
+
+function getSnapshot() {
+  return state;
+}
+
+function getServerSnapshot(): State {
+  return { theme: "light", palette: "default" };
+}
+
+function setTheme(next: Theme | ((t: Theme) => Theme)) {
+  const value = typeof next === "function" ? next(state.theme) : next;
+  if (value === state.theme) return;
+  state = { ...state, theme: value };
+  applyTheme(value);
+  try {
+    localStorage.setItem(THEME_KEY, value);
+  } catch {
+    /* ignore */
+  }
+  emit();
+}
+
+function setPalette(next: Palette) {
+  if (next === state.palette) return;
+  state = { ...state, palette: next };
+  applyPalette(next);
+  try {
+    localStorage.setItem(PALETTE_KEY, next);
+  } catch {
+    /* ignore */
+  }
+  emit();
+}
+
+if (typeof window !== "undefined") {
+  window.addEventListener("storage", (e) => {
+    if (e.key === THEME_KEY && (e.newValue === "light" || e.newValue === "dark")) {
+      setTheme(e.newValue);
+    } else if (e.key === PALETTE_KEY) {
+      const p = e.newValue as Palette | null;
+      if (p && PALETTES.some((x) => x.id === p)) setPalette(p);
+    }
+  });
+}
+
 export function useTheme() {
-  const [theme, setThemeState] = useState<Theme>(() => {
-    const t = readInitialTheme();
-    applyTheme(t);
-    return t;
-  });
-  const [palette, setPaletteState] = useState<Palette>(() => {
-    const p = readInitialPalette();
-    applyPalette(p);
-    return p;
-  });
-
-  useEffect(() => {
-    applyTheme(theme);
-    try {
-      localStorage.setItem(THEME_KEY, theme);
-    } catch {
-      /* ignore */
-    }
-  }, [theme]);
-
-  useEffect(() => {
-    applyPalette(palette);
-    try {
-      localStorage.setItem(PALETTE_KEY, palette);
-    } catch {
-      /* ignore */
-    }
-  }, [palette]);
-
-  const toggle = useCallback(() => setThemeState((t) => (t === "dark" ? "light" : "dark")), []);
-  const setPalette = useCallback((p: Palette) => setPaletteState(p), []);
-  return { theme, toggle, setTheme: setThemeState, palette, setPalette };
+  const snap = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+  const toggle = useCallback(() => setTheme((t) => (t === "dark" ? "light" : "dark")), []);
+  return {
+    theme: snap.theme,
+    palette: snap.palette,
+    toggle,
+    setTheme,
+    setPalette,
+  };
 }
