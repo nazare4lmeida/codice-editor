@@ -1448,7 +1448,21 @@ function RoomPage() {
         </section>
 
         {sidePanel !== "none" && (
-          <aside className="flex max-h-[70vh] w-full flex-col border-t bg-card lg:h-full lg:max-h-none lg:w-80 lg:border-l lg:border-t-0">
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Redimensionar painel lateral"
+            onPointerDown={startResize(() => asideWidth, setAsideWidth, 260, 640)}
+            onDoubleClick={() => setAsideWidth(320)}
+            className="hidden lg:block w-1.5 shrink-0 cursor-col-resize bg-border hover:bg-primary/50 transition-colors"
+            title="Arraste para redimensionar (duplo clique reseta)"
+          />
+        )}
+        {sidePanel !== "none" && (
+          <aside
+            className="flex max-h-[70vh] w-full flex-col border-t bg-card lg:h-full lg:max-h-none lg:shrink-0 lg:border-l lg:border-t-0"
+            style={{ width: isDesktop ? asideWidth : undefined }}
+          >
             <div className="flex items-center justify-between border-b px-3 py-2 text-sm font-semibold">
               <span>{sidePanel === "people" ? `Participantes (${participants.length})` : "Chat da sala"}</span>
               <button onClick={() => setSidePanel("none")} className="rounded p-1 hover:bg-accent" aria-label="Fechar"><X className="h-4 w-4" /></button>
