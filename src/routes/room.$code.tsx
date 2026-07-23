@@ -1225,9 +1225,9 @@ function RoomPage() {
         </div>
       )}
 
-      <main className="flex flex-1 flex-col lg:flex-row">
+      <main className="flex flex-1 flex-col lg:min-h-0 lg:flex-row">
 
-        <section className="flex min-h-[50vh] flex-1 flex-col border-b lg:border-b-0 lg:border-r">
+        <section className="flex min-h-[50vh] flex-1 flex-col border-b lg:min-h-0 lg:min-w-0 lg:border-b-0 lg:border-r">
           <div className="flex items-center gap-0 overflow-x-auto border-b bg-muted/40 text-xs">
             {orderedPaths.map((path) => (
               <button key={path} disabled={!loaded} onClick={() => setActivePath(path)} className={`inline-flex shrink-0 items-center gap-1.5 border-r px-3 py-2 disabled:opacity-60 ${activePath === path ? "bg-background font-medium text-foreground" : "text-muted-foreground hover:bg-accent"}`}>
