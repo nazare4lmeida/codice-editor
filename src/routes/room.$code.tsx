@@ -1314,7 +1314,7 @@ function RoomPage() {
 
         </section>
 
-        <section className="flex min-h-[35vh] w-full flex-col bg-card lg:w-[46%]">
+        <section className="flex min-h-[35vh] w-full flex-col bg-card lg:min-h-0 lg:w-[46%]">
           <div className="flex items-center justify-between border-b bg-muted/40 px-3 py-1.5 text-xs">
             <div className="flex items-center gap-1">
               <button onClick={() => setActiveTab("validate")} className={`inline-flex items-center gap-1.5 rounded px-2 py-1 ${activeTab === "validate" ? "bg-background font-medium text-foreground shadow-sm" : "text-muted-foreground hover:bg-accent"}`}>
