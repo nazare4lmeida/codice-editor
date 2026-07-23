@@ -6,6 +6,7 @@ import {
   ArrowLeft,
   CheckCircle2,
   Copy,
+  Download,
   Eye,
   FileCode,
   Layout,
@@ -16,11 +17,13 @@ import {
   Send,
   Terminal,
   Trash2,
+  Upload,
   Users,
   X,
   XCircle,
   Pencil,
 } from "lucide-react";
+import JSZip from "jszip";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { PalettePicker } from "@/components/palette-picker";
 
