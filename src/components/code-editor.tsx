@@ -5,7 +5,8 @@ import { html } from "@codemirror/lang-html";
 import { css } from "@codemirror/lang-css";
 import { javascript } from "@codemirror/lang-javascript";
 import { json } from "@codemirror/lang-json";
-import { githubLight, githubDark } from "@uiw/codemirror-theme-github";
+import { dracula } from "@uiw/codemirror-theme-dracula";
+import { vscodeLight } from "@uiw/codemirror-theme-vscode";
 import { useTheme } from "@/hooks/use-theme";
 
 /* ---------- color swatch decoration ---------- */
@@ -153,7 +154,7 @@ export function CodeEditor({ value, path, onChange, disabled, placeholder }: Cod
     <CodeMirror
       value={value}
       onChange={onChange}
-      theme={theme === "dark" ? githubDark : githubLight}
+      theme={theme === "dark" ? dracula : vscodeLight}
       extensions={extensions}
       editable={!disabled}
       readOnly={disabled}
