@@ -549,6 +549,7 @@ function RoomPage() {
   const loadedRef = useRef(false);
   const dirtyRef = useRef(false);
   const lastEditingSentAtRef = useRef(0);
+  const importInputRef = useRef<HTMLInputElement | null>(null);
   const editingCleanupRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const orderedPaths = useMemo(() => sortFiles(files), [files]);
