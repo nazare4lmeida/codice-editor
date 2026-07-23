@@ -27,7 +27,7 @@ import { PalettePicker } from "@/components/palette-picker";
 export const Route = createFileRoute("/room/$code")({
   head: ({ params }) => ({
     meta: [
-      { title: `Sala ${params.code} — CodeLive` },
+      { title: `Sala ${params.code} — Codice` },
       {
         name: "description",
         content: "Editor colaborativo ao vivo para aulas.",
