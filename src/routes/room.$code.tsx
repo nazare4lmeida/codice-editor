@@ -554,31 +554,38 @@ function RoomPage() {
   const [addingFile, setAddingFile] = useState(false);
   const [newFileName, setNewFileName] = useState("");
   const [editing, setEditing] = useState<Record<string, EditingInfo>>({});
-  const [outputWidth, setOutputWidth] = useState<number>(() => {
-    if (typeof window === "undefined") return 560;
-    const v = Number(localStorage.getItem("codice:layout:output"));
-    return Number.isFinite(v) && v >= 240 ? v : 560;
-  });
-  const [asideWidth, setAsideWidth] = useState<number>(() => {
-    if (typeof window === "undefined") return 320;
-    const v = Number(localStorage.getItem("codice:layout:aside"));
-    return Number.isFinite(v) && v >= 240 ? v : 320;
-  });
+  // Layout prefs start with SSR-safe defaults and are hydrated in an effect —
+  // reading localStorage/matchMedia during render caused hydration mismatches
+  // that made React drop client state (and the code look "reset").
+  const [outputWidth, setOutputWidth] = useState(560);
+  const [asideWidth, setAsideWidth] = useState(320);
   const [emojiOpen, setEmojiOpen] = useState(false);
-  const [isDesktop, setIsDesktop] = useState<boolean>(() => typeof window !== "undefined" && window.matchMedia("(min-width: 1024px)").matches);
+  const [isDesktop, setIsDesktop] = useState(false);
+  const layoutHydrated = useRef(false);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
     const mql = window.matchMedia("(min-width: 1024px)");
+    setIsDesktop(mql.matches);
     const handler = (e: MediaQueryListEvent) => setIsDesktop(e.matches);
     mql.addEventListener("change", handler);
+    try {
+      const o = Number(localStorage.getItem("codice:layout:output"));
+      if (Number.isFinite(o) && o >= 240) setOutputWidth(o);
+      const a = Number(localStorage.getItem("codice:layout:aside"));
+      if (Number.isFinite(a) && a >= 240) setAsideWidth(a);
+    } catch {
+      /* ignore */
+    }
+    layoutHydrated.current = true;
     return () => mql.removeEventListener("change", handler);
   }, []);
 
   useEffect(() => {
+    if (!layoutHydrated.current) return;
     try { localStorage.setItem("codice:layout:output", String(outputWidth)); } catch {}
   }, [outputWidth]);
   useEffect(() => {
+    if (!layoutHydrated.current) return;
     try { localStorage.setItem("codice:layout:aside", String(asideWidth)); } catch {}
   }, [asideWidth]);
 
