@@ -646,7 +646,11 @@ function RoomPage() {
     async (nextFiles: ProjectFiles, nextActivePath = activePathRef.current) => {
       const normalized = normalizeFiles(nextFiles);
       const payload = serializeProject(normalized, nextActivePath);
-      if (payload === lastSavedPayloadRef.current) return true;
+      if (payload === lastSavedPayloadRef.current) {
+        dirtyRef.current = false;
+        setSaveState("saved");
+        return true;
+      }
 
       setSaveState("saving");
       setSaveError(null);
@@ -669,11 +673,19 @@ function RoomPage() {
         setSaveState("error");
         setSaveError(message);
         console.error("Não foi possível salvar a sala", message);
+        // Keep the local cache authoritative so a reload restores these edits.
+        writeDraftCache(code, normalized, nextActivePath, { dirty: true });
         return false;
       }
 
       lastSavedPayloadRef.current = payload;
       dirtyRef.current = false;
+      const confirmedAt = data.updated_at ? new Date(data.updated_at).getTime() : Date.now();
+      remoteUpdatedAtRef.current = confirmedAt;
+      writeDraftCache(code, normalized, nextActivePath, {
+        baseUpdatedAt: confirmedAt,
+        dirty: false,
+      });
       setSaveState("saved");
       return true;
     },
@@ -686,7 +698,7 @@ function RoomPage() {
       filesRef.current = normalized;
       activePathRef.current = nextActivePath;
       dirtyRef.current = true;
-      writeDraftCache(code, normalized, nextActivePath);
+      writeDraftCache(code, normalized, nextActivePath, { dirty: true });
       setSaveState("saving");
       if (persistTimer.current) clearTimeout(persistTimer.current);
       // Debounce DB writes: with 30+ users typing, saving on every keystroke
@@ -712,7 +724,7 @@ function RoomPage() {
           activePathRef.current = nextActive;
           setActivePath(nextActive);
         }
-        writeDraftCache(code, normalized, activePathRef.current);
+        writeDraftCache(code, normalized, activePathRef.current, { dirty: true });
         return normalized;
       });
     },
@@ -725,12 +737,48 @@ function RoomPage() {
       clearTimeout(persistTimer.current);
       persistTimer.current = null;
     }
-    writeDraftCache(code, filesRef.current, activePathRef.current);
+    writeDraftCache(code, filesRef.current, activePathRef.current, { dirty: true });
     void saveProject(filesRef.current, activePathRef.current);
   }, [code, saveProject]);
 
+  // Fire-and-forget save that survives page unload (normal fetch is aborted).
+  const persistBeacon = useCallback(() => {
+    if (!loadedRef.current || !dirtyRef.current) return;
+    const payload = serializeProject(filesRef.current, activePathRef.current);
+    if (payload === lastSavedPayloadRef.current) return;
+    writeDraftCache(code, filesRef.current, activePathRef.current, { dirty: true });
+    const url = import.meta.env.VITE_SUPABASE_URL;
+    const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+    if (!url || !key) return;
+    try {
+      void fetch(`${url}/rest/v1/rooms?on_conflict=code`, {
+        method: "POST",
+        keepalive: true,
+        headers: {
+          "Content-Type": "application/json",
+          apikey: key,
+          Authorization: `Bearer ${key}`,
+          Prefer: "resolution=merge-duplicates,return=minimal",
+        },
+        body: JSON.stringify({
+          code,
+          content: payload,
+          language: "web",
+          updated_at: new Date().toISOString(),
+        }),
+      });
+    } catch {
+      /* best effort */
+    }
+  }, [code]);
+
   useEffect(() => {
     let cancelled = false;
+    // Guard: this effect must run exactly once per room code. Re-running it
+    // would overwrite in-progress edits with the last server snapshot.
+    if (loadOnceRef.current === code) return;
+    loadOnceRef.current = code;
+
     (async () => {
       const { data, error } = await supabase
         .from("rooms")
@@ -738,11 +786,19 @@ function RoomPage() {
         .eq("code", code)
         .maybeSingle();
 
-      const remoteFiles = parseStoredContent(error ? null : data?.content);
+      const hasRemoteRow = !error && !!data?.content;
+      const remoteFiles = parseStoredContent(hasRemoteRow ? data!.content : null);
       const remoteUpdatedAt = data?.updated_at ? new Date(data.updated_at).getTime() : 0;
+      remoteUpdatedAtRef.current = remoteUpdatedAt;
       const cached = readDraftCache(code);
-      const shouldUseCache = !!cached && cached.savedAt >= remoteUpdatedAt;
-      const initialFiles = shouldUseCache ? cached.files : remoteFiles;
+
+      // Prefer the local cache whenever the server has nothing newer than what
+      // the cache was based on (server-vs-server comparison, no clock skew),
+      // or when the fetch failed / the room row does not exist yet.
+      const shouldUseCache =
+        !!cached && (!hasRemoteRow || cached.baseUpdatedAt >= remoteUpdatedAt || cached.dirty);
+
+      const initialFiles = shouldUseCache && cached ? cached.files : remoteFiles;
       const initialActivePath =
         shouldUseCache && cached && initialFiles[cached.activePath] !== undefined
           ? cached.activePath
@@ -750,29 +806,36 @@ function RoomPage() {
             ? "index.html"
             : sortFiles(initialFiles)[0];
 
-      if (!cancelled) {
-        setFiles(initialFiles);
-        setActivePath(initialActivePath);
-        filesRef.current = initialFiles;
-        activePathRef.current = initialActivePath;
-        writeDraftCache(code, initialFiles, initialActivePath);
-        lastSavedPayloadRef.current = shouldUseCache
-          ? ""
-          : serializeProject(initialFiles, initialActivePath);
-        setPreviewSrcDoc(buildPreviewHtml(initialFiles));
-        setLoaded(true);
-        loadedRef.current = true;
-        setSaveState(shouldUseCache ? "saving" : "saved");
-        if (shouldUseCache) {
-          dirtyRef.current = true;
-          void saveProject(initialFiles, initialActivePath);
-        }
+      if (cancelled) return;
+
+      setFiles(initialFiles);
+      setActivePath(initialActivePath);
+      filesRef.current = initialFiles;
+      activePathRef.current = initialActivePath;
+      const initialPayload = serializeProject(initialFiles, initialActivePath);
+      const remotePayload = hasRemoteRow ? serializeProject(remoteFiles, initialActivePath) : "";
+      const needsSave = initialPayload !== remotePayload;
+      lastSavedPayloadRef.current = needsSave ? "" : initialPayload;
+      writeDraftCache(code, initialFiles, initialActivePath, {
+        baseUpdatedAt: remoteUpdatedAt,
+        dirty: needsSave,
+      });
+      setPreviewSrcDoc(buildPreviewHtml(initialFiles));
+      setLoaded(true);
+      loadedRef.current = true;
+      setSaveState(needsSave ? "saving" : "saved");
+      if (needsSave) {
+        dirtyRef.current = true;
+        void saveProject(initialFiles, initialActivePath);
+      } else {
+        dirtyRef.current = false;
       }
     })();
     return () => {
       cancelled = true;
     };
   }, [code, saveProject]);
+
 
   useEffect(() => {
     const flush = () => persistNow();
