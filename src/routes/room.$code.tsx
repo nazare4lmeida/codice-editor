@@ -128,6 +128,10 @@ interface RoomDraftCache {
   files: ProjectFiles;
   activePath: string;
   savedAt: number;
+  /** Server `updated_at` (ms) this cache was based on. */
+  baseUpdatedAt: number;
+  /** True when the cache holds edits not confirmed by the server yet. */
+  dirty: boolean;
 }
 
 interface StoredProjectV2 {
