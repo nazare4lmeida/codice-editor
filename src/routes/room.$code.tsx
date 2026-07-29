@@ -817,66 +817,92 @@ function RoomPage() {
     loadOnceRef.current = code;
 
     (async () => {
-      const { data, error } = await supabase
-        .from("rooms")
-        .select("content, updated_at")
-        .eq("code", code)
-        .maybeSingle();
+      try {
+        const { data, error } = await supabase
+          .from("rooms")
+          .select("content, updated_at")
+          .eq("code", code)
+          .maybeSingle();
 
-      const hasRemoteRow = !error && !!data?.content;
-      const remoteFiles = parseStoredContent(hasRemoteRow ? data!.content : null);
-      const remoteUpdatedAt = data?.updated_at ? new Date(data.updated_at).getTime() : 0;
-      remoteUpdatedAtRef.current = remoteUpdatedAt;
-      const cached = readDraftCache(code);
+        const hasRemoteRow = !error && !!data?.content;
+        const remoteFiles = parseStoredContent(hasRemoteRow ? data.content : null);
+        const remoteUpdatedAt = data?.updated_at ? new Date(data.updated_at).getTime() : 0;
+        remoteUpdatedAtRef.current = remoteUpdatedAt;
+        const cached = readDraftCache(code);
 
-      const remoteIsDefault = isDefaultProject(remoteFiles);
-      const cacheIsDefault = cached ? isDefaultProject(cached.files) : false;
-      const remoteHasRealProject = hasRemoteRow && !remoteIsDefault;
-      // Prefer local cache only when the server has nothing newer than the
-      // server snapshot that cache was based on. A stale dirty cache containing
-      // the starter project must never override a real saved project — that was
-      // what made index.html appear to "go back to the padrão" after reload.
-      const shouldUseCache =
-        !!cached &&
-        !(remoteHasRealProject && cacheIsDefault) &&
-        (!!error ||
-          !hasRemoteRow ||
-          cached.baseUpdatedAt >= remoteUpdatedAt ||
-          (cached.dirty &&
-            cached.baseUpdatedAt === 0 &&
-            (cached.savedAt >= remoteUpdatedAt || (remoteIsDefault && !cacheIsDefault))));
+        const remoteIsDefault = isDefaultProject(remoteFiles);
+        const cacheIsDefault = cached ? isDefaultProject(cached.files) : false;
+        const remoteHasRealProject = hasRemoteRow && !remoteIsDefault;
+        // Prefer local cache only when the server has nothing newer than the
+        // server snapshot that cache was based on. A stale dirty cache containing
+        // the starter project must never override a real saved project — that was
+        // what made index.html appear to "go back to the padrão" after reload.
+        const shouldUseCache =
+          !!cached &&
+          !(remoteHasRealProject && cacheIsDefault) &&
+          (!!error ||
+            !hasRemoteRow ||
+            cached.baseUpdatedAt >= remoteUpdatedAt ||
+            (cached.dirty &&
+              cached.baseUpdatedAt === 0 &&
+              (cached.savedAt >= remoteUpdatedAt || (remoteIsDefault && !cacheIsDefault))));
 
-      const initialFiles = shouldUseCache && cached ? cached.files : remoteFiles;
-      const initialActivePath =
-        shouldUseCache && cached && initialFiles[cached.activePath] !== undefined
+        const initialFiles = shouldUseCache && cached ? cached.files : remoteFiles;
+        const initialActivePath =
+          shouldUseCache && cached && initialFiles[cached.activePath] !== undefined
+            ? cached.activePath
+            : initialFiles["index.html"] !== undefined
+              ? "index.html"
+              : sortFiles(initialFiles)[0];
+
+        if (cancelled) return;
+
+        setFiles(initialFiles);
+        setActivePath(initialActivePath);
+        filesRef.current = initialFiles;
+        activePathRef.current = initialActivePath;
+        const initialPayload = serializeProject(initialFiles, initialActivePath);
+        const remotePayload = hasRemoteRow ? serializeProject(remoteFiles, initialActivePath) : "";
+        const needsSave = initialPayload !== remotePayload;
+        lastSavedPayloadRef.current = needsSave ? "" : initialPayload;
+        writeDraftCache(code, initialFiles, initialActivePath, {
+          baseUpdatedAt: remoteUpdatedAt,
+          dirty: needsSave,
+        });
+        try {
+          setPreviewSrcDoc(buildPreviewHtml(initialFiles));
+        } catch (previewError) {
+          console.error("Não foi possível preparar o preview inicial", previewError);
+          setPreviewSrcDoc("");
+        }
+        setLoaded(true);
+        loadedRef.current = true;
+        setSaveState(needsSave ? "saving" : "saved");
+        if (needsSave) {
+          dirtyRef.current = true;
+          void saveProject(initialFiles, initialActivePath);
+        } else {
+          dirtyRef.current = false;
+        }
+      } catch (loadError) {
+        console.error("Não foi possível carregar a sala", loadError);
+        if (cancelled) return;
+        const cached = readDraftCache(code);
+        const fallbackFiles = cached?.files ?? { ...DEFAULT_PROJECT };
+        const fallbackActivePath = cached && fallbackFiles[cached.activePath] !== undefined
           ? cached.activePath
-          : initialFiles["index.html"] !== undefined
+          : fallbackFiles["index.html"] !== undefined
             ? "index.html"
-            : sortFiles(initialFiles)[0];
-
-      if (cancelled) return;
-
-      setFiles(initialFiles);
-      setActivePath(initialActivePath);
-      filesRef.current = initialFiles;
-      activePathRef.current = initialActivePath;
-      const initialPayload = serializeProject(initialFiles, initialActivePath);
-      const remotePayload = hasRemoteRow ? serializeProject(remoteFiles, initialActivePath) : "";
-      const needsSave = initialPayload !== remotePayload;
-      lastSavedPayloadRef.current = needsSave ? "" : initialPayload;
-      writeDraftCache(code, initialFiles, initialActivePath, {
-        baseUpdatedAt: remoteUpdatedAt,
-        dirty: needsSave,
-      });
-      setPreviewSrcDoc(buildPreviewHtml(initialFiles));
-      setLoaded(true);
-      loadedRef.current = true;
-      setSaveState(needsSave ? "saving" : "saved");
-      if (needsSave) {
+            : sortFiles(fallbackFiles)[0];
+        setFiles(fallbackFiles);
+        setActivePath(fallbackActivePath);
+        filesRef.current = fallbackFiles;
+        activePathRef.current = fallbackActivePath;
+        setLoaded(true);
+        loadedRef.current = true;
         dirtyRef.current = true;
-        void saveProject(initialFiles, initialActivePath);
-      } else {
-        dirtyRef.current = false;
+        setSaveState("error");
+        setSaveError("Não consegui confirmar o código salvo agora, mas mantive o rascunho local aberto.");
       }
     })();
     return () => {
