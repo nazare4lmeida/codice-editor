@@ -811,9 +811,11 @@ function RoomPage() {
 
   useEffect(() => {
     let cancelled = false;
-    // Guard: this effect must run exactly once per room code. Re-running it
-    // would overwrite in-progress edits with the last server snapshot.
-    if (loadOnceRef.current === code) return;
+    // Guard: once the room is loaded, never re-run this for the same code.
+    // In React dev/StrictMode the first effect pass is intentionally cleaned
+    // up and replayed; blocking the replay left the room stuck on the starter
+    // state / "Carregando sala…".
+    if (loadedRef.current && loadOnceRef.current === code) return;
     loadOnceRef.current = code;
 
     (async () => {
