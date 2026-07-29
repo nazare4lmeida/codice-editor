@@ -548,7 +548,7 @@ function RoomPage() {
     { level: "log" | "error" | "warn" | "info"; parts: string[]; at: number }[]
   >([]);
   const [sidePanel, setSidePanel] = useState<SidePanel>("none");
-  const [chat, setChat] = useState<ChatMsg[]>(() => readChatCache(code));
+  const [chat, setChat] = useState<ChatMsg[]>([]);
   const [chatDraft, setChatDraft] = useState("");
   const [unreadChat, setUnreadChat] = useState(0);
   const [addingFile, setAddingFile] = useState(false);
