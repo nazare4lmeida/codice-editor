@@ -29,6 +29,45 @@ function makeCode() {
   return Math.random().toString(36).slice(2, 8).toUpperCase();
 }
 
+const DEFAULT_ROOM_CONTENT = JSON.stringify({
+  version: 2,
+  activePath: "index.html",
+  files: {
+    "index.html": `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <h1 id="title">Olá turma!</h1>
+    <button id="btn">Clique aqui</button>
+    <script src="script.js"></script>
+  </body>
+</html>`,
+    "styles.css": `body {
+  font-family: system-ui, sans-serif;
+  padding: 2rem;
+  background: #0f172a;
+  color: #f8fafc;
+}
+
+button {
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  border: 0;
+  background: #3b82f6;
+  color: white;
+  cursor: pointer;
+}`,
+    "script.js": `document.getElementById('btn').addEventListener('click', () => {
+  document.getElementById('title').textContent = 'Você clicou!';
+  console.log('Botão clicado');
+});`,
+  },
+});
+
 function Landing() {
   const navigate = useNavigate();
   const [joinCode, setJoinCode] = useState("");
@@ -43,7 +82,11 @@ function Landing() {
     setError(null);
     try {
       const code = makeCode();
-      const { error } = await supabase.from("rooms").insert({ code });
+      const { error } = await supabase.from("rooms").insert({
+        code,
+        content: DEFAULT_ROOM_CONTENT,
+        language: "web",
+      });
       if (error) throw error;
       sessionStorage.setItem("codice:name", displayName);
       navigate({ to: "/room/$code", params: { code } });

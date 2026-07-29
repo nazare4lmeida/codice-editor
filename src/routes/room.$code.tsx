@@ -252,6 +252,19 @@ function serializeProject(files: ProjectFiles, activePath: string) {
   return JSON.stringify({ version: 2, files: normalizeFiles(files), activePath } satisfies StoredProjectV2);
 }
 
+function filesSignature(files: ProjectFiles) {
+  const normalized = normalizeFiles(files);
+  return JSON.stringify(
+    Object.fromEntries(sortFiles(normalized).map((path) => [path, normalized[path]])),
+  );
+}
+
+const DEFAULT_PROJECT_SIGNATURE = filesSignature(DEFAULT_PROJECT);
+
+function isDefaultProject(files: ProjectFiles) {
+  return filesSignature(files) === DEFAULT_PROJECT_SIGNATURE;
+}
+
 function getDraftKey(code: string) {
   return `codice:room:${code}:draft:v2`;
 }
@@ -533,7 +546,7 @@ function buildPreviewHtml(filesInput: ProjectFiles) {
 function RoomPage() {
   const { code: rawCode } = useParams({ from: "/room/$code" });
   const code = rawCode.toUpperCase();
-  const [files, setFiles] = useState<ProjectFiles>(DEFAULT_PROJECT);
+  const [files, setFiles] = useState<ProjectFiles>({});
   const [activePath, setActivePath] = useState("index.html");
   const [loaded, setLoaded] = useState(false);
   const [saveState, setSaveState] = useState<SaveState>("saved");
@@ -621,7 +634,7 @@ function RoomPage() {
 
   const channelRef = useRef<RealtimeChannel | null>(null);
   const persistTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const filesRef = useRef<ProjectFiles>(DEFAULT_PROJECT);
+  const filesRef = useRef<ProjectFiles>({});
   const activePathRef = useRef("index.html");
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
   const lastSavedPayloadRef = useRef("");
@@ -810,11 +823,22 @@ function RoomPage() {
       remoteUpdatedAtRef.current = remoteUpdatedAt;
       const cached = readDraftCache(code);
 
-      // Prefer the local cache whenever the server has nothing newer than what
-      // the cache was based on (server-vs-server comparison, no clock skew),
-      // or when the fetch failed / the room row does not exist yet.
+      const remoteIsDefault = isDefaultProject(remoteFiles);
+      const cacheIsDefault = cached ? isDefaultProject(cached.files) : false;
+      const remoteHasRealProject = hasRemoteRow && !remoteIsDefault;
+      // Prefer local cache only when the server has nothing newer than the
+      // server snapshot that cache was based on. A stale dirty cache containing
+      // the starter project must never override a real saved project — that was
+      // what made index.html appear to "go back to the padrão" after reload.
       const shouldUseCache =
-        !!cached && (!hasRemoteRow || cached.baseUpdatedAt >= remoteUpdatedAt || cached.dirty);
+        !!cached &&
+        !(remoteHasRealProject && cacheIsDefault) &&
+        (!!error ||
+          !hasRemoteRow ||
+          cached.baseUpdatedAt >= remoteUpdatedAt ||
+          (cached.dirty &&
+            cached.baseUpdatedAt === 0 &&
+            (cached.savedAt >= remoteUpdatedAt || (remoteIsDefault && !cacheIsDefault))));
 
       const initialFiles = shouldUseCache && cached ? cached.files : remoteFiles;
       const initialActivePath =
@@ -1456,15 +1480,15 @@ function RoomPage() {
             </div>
           </div>
           <div className="relative flex flex-1 overflow-hidden bg-background">
-            <CodeEditor
-              value={currentValue}
-              path={activePath}
-              onChange={(v) => updateFile(activePath, v)}
-              disabled={!loaded}
-              placeholder={loaded ? `${languageLabel(activePath)}…` : "Carregando sala…"}
-            />
-            {!loaded && (
-              <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-background/70 text-sm text-muted-foreground">
+            {loaded ? (
+              <CodeEditor
+                value={currentValue}
+                path={activePath}
+                onChange={(v) => updateFile(activePath, v)}
+                placeholder={`${languageLabel(activePath)}…`}
+              />
+            ) : (
+              <div className="absolute inset-0 flex items-center justify-center bg-background text-sm text-muted-foreground">
                 Carregando sala…
               </div>
             )}
