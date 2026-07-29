@@ -840,13 +840,20 @@ function RoomPage() {
 
 
   useEffect(() => {
-    const flush = () => persistNow();
-    window.addEventListener("beforeunload", flush);
-    return () => {
-      window.removeEventListener("beforeunload", flush);
-      flush();
+    const onUnload = () => persistBeacon();
+    const onHidden = () => {
+      if (document.visibilityState === "hidden") persistBeacon();
     };
-  }, [persistNow]);
+    window.addEventListener("beforeunload", onUnload);
+    window.addEventListener("pagehide", onUnload);
+    document.addEventListener("visibilitychange", onHidden);
+    return () => {
+      window.removeEventListener("beforeunload", onUnload);
+      window.removeEventListener("pagehide", onUnload);
+      document.removeEventListener("visibilitychange", onHidden);
+      persistNow();
+    };
+  }, [persistNow, persistBeacon]);
 
   useEffect(() => {
     if (!loaded) return;
