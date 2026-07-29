@@ -46,9 +46,11 @@ function applyPalette(palette: Palette) {
 
 type State = { theme: Theme; palette: Palette };
 
+const SERVER_STATE: State = { theme: "light", palette: "default" };
+
 let state: State =
   typeof window === "undefined"
-    ? { theme: "light", palette: "default" }
+    ? SERVER_STATE
     : { theme: readInitialTheme(), palette: readInitialPalette() };
 
 if (typeof window !== "undefined") {
@@ -72,7 +74,7 @@ function getSnapshot() {
 }
 
 function getServerSnapshot(): State {
-  return { theme: "light", palette: "default" };
+  return SERVER_STATE;
 }
 
 function setTheme(next: Theme | ((t: Theme) => Theme)) {
