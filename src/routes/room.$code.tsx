@@ -810,7 +810,6 @@ function RoomPage() {
   }, [code]);
 
   useEffect(() => {
-    let cancelled = false;
     // Guard: once the room is loaded, never re-run this for the same code.
     // In React dev/StrictMode the first effect pass is intentionally cleaned
     // up and replayed; blocking the replay left the room stuck on the starter
@@ -857,8 +856,6 @@ function RoomPage() {
               ? "index.html"
               : sortFiles(initialFiles)[0];
 
-        if (cancelled) return;
-
         setFiles(initialFiles);
         setActivePath(initialActivePath);
         filesRef.current = initialFiles;
@@ -888,7 +885,6 @@ function RoomPage() {
         }
       } catch (loadError) {
         console.error("Não foi possível carregar a sala", loadError);
-        if (cancelled) return;
         const cached = readDraftCache(code);
         const fallbackFiles = cached?.files ?? { ...DEFAULT_PROJECT };
         const fallbackActivePath = cached && fallbackFiles[cached.activePath] !== undefined
@@ -907,9 +903,6 @@ function RoomPage() {
         setSaveError("Não consegui confirmar o código salvo agora, mas mantive o rascunho local aberto.");
       }
     })();
-    return () => {
-      cancelled = true;
-    };
   }, [code, saveProject]);
 
 
