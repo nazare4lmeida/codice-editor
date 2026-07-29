@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import CodeMirror, { type Extension } from "@uiw/react-codemirror";
 import { EditorView, Decoration, ViewPlugin, WidgetType, type DecorationSet, type ViewUpdate } from "@codemirror/view";
 import { html } from "@codemirror/lang-html";
@@ -134,6 +134,12 @@ export interface CodeEditorProps {
 export function CodeEditor({ value, path, onChange, disabled, placeholder }: CodeEditorProps) {
   const { theme, palette } = useTheme();
   const editorTheme = useMemo(() => getEditorTheme(palette, theme), [palette, theme]);
+  const viewRef = useRef<EditorView | null>(null);
+  const localValueRef = useRef(value);
+  // initial doc per file — external updates are applied as minimal diffs below
+  const initialDocRef = useRef<Record<string, string>>({});
+  if (initialDocRef.current[path] === undefined) initialDocRef.current[path] = value;
+
   const extensions = useMemo(() => {
     const exts: Extension[] = [
       EditorView.lineWrapping,
@@ -150,10 +156,52 @@ export function CodeEditor({ value, path, onChange, disabled, placeholder }: Cod
     return exts;
   }, [path]);
 
+  // Apply external (remote) changes without resetting scroll position or cursor
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+    if (value === localValueRef.current) return;
+    const current = view.state.doc.toString();
+    if (current === value) {
+      localValueRef.current = value;
+      return;
+    }
+    // minimal diff: common prefix/suffix
+    let start = 0;
+    const maxStart = Math.min(current.length, value.length);
+    while (start < maxStart && current[start] === value[start]) start++;
+    let endOld = current.length;
+    let endNew = value.length;
+    while (endOld > start && endNew > start && current[endOld - 1] === value[endNew - 1]) {
+      endOld--;
+      endNew--;
+    }
+    const sel = view.state.selection.main;
+    const scrollTop = view.scrollDOM.scrollTop;
+    view.dispatch({
+      changes: { from: start, to: endOld, insert: value.slice(start, endNew) },
+      selection: {
+        anchor: Math.min(sel.anchor, value.length),
+        head: Math.min(sel.head, value.length),
+      },
+      scrollIntoView: false,
+    });
+    view.scrollDOM.scrollTop = scrollTop;
+    localValueRef.current = value;
+  }, [value]);
+
   return (
     <CodeMirror
-      value={value}
-      onChange={onChange}
+      key={path}
+      value={initialDocRef.current[path]}
+      onCreateEditor={(view) => {
+        viewRef.current = view;
+        localValueRef.current = view.state.doc.toString();
+      }}
+      onChange={(v) => {
+        localValueRef.current = v;
+        onChange(v);
+      }}
       theme={editorTheme}
       extensions={extensions}
       editable={!disabled}
@@ -173,3 +221,4 @@ export function CodeEditor({ value, path, onChange, disabled, placeholder }: Cod
     />
   );
 }
+
