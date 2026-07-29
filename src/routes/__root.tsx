@@ -93,8 +93,6 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:title", content: "Codice — Workspace colaborativo de código para aulas" },
       { name: "twitter:description", content: "Codice é o workspace onde a turma programa junta: múltiplos arquivos, execução ao vivo e preview em tempo real, sem instalar nada." },
-      { property: "og:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/attachments/og-images/daf7cd61-4ceb-42cc-8da6-30b4568087ce" },
-      { name: "twitter:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/attachments/og-images/daf7cd61-4ceb-42cc-8da6-30b4568087ce" },
     ],
     links: [
       {

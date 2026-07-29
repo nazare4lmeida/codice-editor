@@ -20,6 +20,14 @@ export const Route = createFileRoute("/")({
         content:
           "Codice é o workspace onde a turma programa junta: múltiplos arquivos, execução ao vivo e preview em tempo real, sem instalar nada.",
       },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:title", content: "Codice — Workspace colaborativo de código para aulas" },
+      {
+        name: "twitter:description",
+        content:
+          "Codice é o workspace onde a turma programa junta: múltiplos arquivos, execução ao vivo e preview em tempo real, sem instalar nada.",
+      },
     ],
   }),
   component: Landing,
