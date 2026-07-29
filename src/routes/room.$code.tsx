@@ -268,6 +268,11 @@ function readDraftCache(code: string): RoomDraftCache | null {
         files: normalizeFiles(parsed.files),
         activePath: parsed.activePath,
         savedAt: parsed.savedAt,
+        // Server timestamp the cache is based on. Comparing SERVER timestamps
+        // (instead of local Date.now vs server time) makes reload-restore
+        // immune to clock skew — the main cause of "code reverted to default".
+        baseUpdatedAt: typeof parsed.baseUpdatedAt === "number" ? parsed.baseUpdatedAt : 0,
+        dirty: parsed.dirty !== false,
       };
     }
   } catch {
@@ -276,17 +281,28 @@ function readDraftCache(code: string): RoomDraftCache | null {
   return null;
 }
 
-function writeDraftCache(code: string, files: ProjectFiles, activePath: string) {
+function writeDraftCache(
+  code: string,
+  files: ProjectFiles,
+  activePath: string,
+  meta?: { baseUpdatedAt?: number; dirty?: boolean },
+) {
   if (typeof window === "undefined") return;
   try {
-    localStorage.setItem(
-      getDraftKey(code),
-      JSON.stringify({ files: normalizeFiles(files), activePath, savedAt: Date.now() } satisfies RoomDraftCache),
-    );
+    const prev = readDraftCache(code);
+    const entry: RoomDraftCache = {
+      files: normalizeFiles(files),
+      activePath,
+      savedAt: Date.now(),
+      baseUpdatedAt: meta?.baseUpdatedAt ?? prev?.baseUpdatedAt ?? 0,
+      dirty: meta?.dirty ?? true,
+    };
+    localStorage.setItem(getDraftKey(code), JSON.stringify(entry));
   } catch {
     // Storage may be unavailable in private mode.
   }
 }
+
 
 function getChatKey(code: string) {
   return `codice:room:${code}:chat:v1`;
