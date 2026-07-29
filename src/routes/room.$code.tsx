@@ -128,6 +128,10 @@ interface RoomDraftCache {
   files: ProjectFiles;
   activePath: string;
   savedAt: number;
+  /** Server `updated_at` (ms) this cache was based on. */
+  baseUpdatedAt: number;
+  /** True when the cache holds edits not confirmed by the server yet. */
+  dirty: boolean;
 }
 
 interface StoredProjectV2 {
@@ -268,6 +272,11 @@ function readDraftCache(code: string): RoomDraftCache | null {
         files: normalizeFiles(parsed.files),
         activePath: parsed.activePath,
         savedAt: parsed.savedAt,
+        // Server timestamp the cache is based on. Comparing SERVER timestamps
+        // (instead of local Date.now vs server time) makes reload-restore
+        // immune to clock skew — the main cause of "code reverted to default".
+        baseUpdatedAt: typeof parsed.baseUpdatedAt === "number" ? parsed.baseUpdatedAt : 0,
+        dirty: parsed.dirty !== false,
       };
     }
   } catch {
@@ -276,17 +285,28 @@ function readDraftCache(code: string): RoomDraftCache | null {
   return null;
 }
 
-function writeDraftCache(code: string, files: ProjectFiles, activePath: string) {
+function writeDraftCache(
+  code: string,
+  files: ProjectFiles,
+  activePath: string,
+  meta?: { baseUpdatedAt?: number; dirty?: boolean },
+) {
   if (typeof window === "undefined") return;
   try {
-    localStorage.setItem(
-      getDraftKey(code),
-      JSON.stringify({ files: normalizeFiles(files), activePath, savedAt: Date.now() } satisfies RoomDraftCache),
-    );
+    const prev = readDraftCache(code);
+    const entry: RoomDraftCache = {
+      files: normalizeFiles(files),
+      activePath,
+      savedAt: Date.now(),
+      baseUpdatedAt: meta?.baseUpdatedAt ?? prev?.baseUpdatedAt ?? 0,
+      dirty: meta?.dirty ?? true,
+    };
+    localStorage.setItem(getDraftKey(code), JSON.stringify(entry));
   } catch {
     // Storage may be unavailable in private mode.
   }
 }
+
 
 function getChatKey(code: string) {
   return `codice:room:${code}:chat:v1`;
@@ -528,37 +548,44 @@ function RoomPage() {
     { level: "log" | "error" | "warn" | "info"; parts: string[]; at: number }[]
   >([]);
   const [sidePanel, setSidePanel] = useState<SidePanel>("none");
-  const [chat, setChat] = useState<ChatMsg[]>(() => readChatCache(code));
+  const [chat, setChat] = useState<ChatMsg[]>([]);
   const [chatDraft, setChatDraft] = useState("");
   const [unreadChat, setUnreadChat] = useState(0);
   const [addingFile, setAddingFile] = useState(false);
   const [newFileName, setNewFileName] = useState("");
   const [editing, setEditing] = useState<Record<string, EditingInfo>>({});
-  const [outputWidth, setOutputWidth] = useState<number>(() => {
-    if (typeof window === "undefined") return 560;
-    const v = Number(localStorage.getItem("codice:layout:output"));
-    return Number.isFinite(v) && v >= 240 ? v : 560;
-  });
-  const [asideWidth, setAsideWidth] = useState<number>(() => {
-    if (typeof window === "undefined") return 320;
-    const v = Number(localStorage.getItem("codice:layout:aside"));
-    return Number.isFinite(v) && v >= 240 ? v : 320;
-  });
+  // Layout prefs start with SSR-safe defaults and are hydrated in an effect —
+  // reading localStorage/matchMedia during render caused hydration mismatches
+  // that made React drop client state (and the code look "reset").
+  const [outputWidth, setOutputWidth] = useState(560);
+  const [asideWidth, setAsideWidth] = useState(320);
   const [emojiOpen, setEmojiOpen] = useState(false);
-  const [isDesktop, setIsDesktop] = useState<boolean>(() => typeof window !== "undefined" && window.matchMedia("(min-width: 1024px)").matches);
+  const [isDesktop, setIsDesktop] = useState(false);
+  const layoutHydrated = useRef(false);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
     const mql = window.matchMedia("(min-width: 1024px)");
+    setIsDesktop(mql.matches);
     const handler = (e: MediaQueryListEvent) => setIsDesktop(e.matches);
     mql.addEventListener("change", handler);
+    try {
+      const o = Number(localStorage.getItem("codice:layout:output"));
+      if (Number.isFinite(o) && o >= 240) setOutputWidth(o);
+      const a = Number(localStorage.getItem("codice:layout:aside"));
+      if (Number.isFinite(a) && a >= 240) setAsideWidth(a);
+    } catch {
+      /* ignore */
+    }
+    layoutHydrated.current = true;
     return () => mql.removeEventListener("change", handler);
   }, []);
 
   useEffect(() => {
+    if (!layoutHydrated.current) return;
     try { localStorage.setItem("codice:layout:output", String(outputWidth)); } catch {}
   }, [outputWidth]);
   useEffect(() => {
+    if (!layoutHydrated.current) return;
     try { localStorage.setItem("codice:layout:aside", String(asideWidth)); } catch {}
   }, [asideWidth]);
 
@@ -603,6 +630,8 @@ function RoomPage() {
   const lastEditingSentAtRef = useRef(0);
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const editingCleanupRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const remoteUpdatedAtRef = useRef(0);
+  const loadOnceRef = useRef<string | null>(null);
 
   const orderedPaths = useMemo(() => sortFiles(files), [files]);
   const currentValue = files[activePath] ?? "";
@@ -610,7 +639,16 @@ function RoomPage() {
   const errorCount = diagnostics?.length ?? 0;
 
 
+  // Restore chat history after hydration (localStorage during render breaks SSR).
+  const chatHydrated = useRef(false);
   useEffect(() => {
+    const cached = readChatCache(code);
+    if (cached.length > 0) setChat(cached);
+    chatHydrated.current = true;
+  }, [code]);
+
+  useEffect(() => {
+    if (!chatHydrated.current) return;
     writeChatCache(code, chat);
   }, [code, chat]);
 
@@ -626,7 +664,11 @@ function RoomPage() {
     async (nextFiles: ProjectFiles, nextActivePath = activePathRef.current) => {
       const normalized = normalizeFiles(nextFiles);
       const payload = serializeProject(normalized, nextActivePath);
-      if (payload === lastSavedPayloadRef.current) return true;
+      if (payload === lastSavedPayloadRef.current) {
+        dirtyRef.current = false;
+        setSaveState("saved");
+        return true;
+      }
 
       setSaveState("saving");
       setSaveError(null);
@@ -649,11 +691,19 @@ function RoomPage() {
         setSaveState("error");
         setSaveError(message);
         console.error("Não foi possível salvar a sala", message);
+        // Keep the local cache authoritative so a reload restores these edits.
+        writeDraftCache(code, normalized, nextActivePath, { dirty: true });
         return false;
       }
 
       lastSavedPayloadRef.current = payload;
       dirtyRef.current = false;
+      const confirmedAt = data.updated_at ? new Date(data.updated_at).getTime() : Date.now();
+      remoteUpdatedAtRef.current = confirmedAt;
+      writeDraftCache(code, normalized, nextActivePath, {
+        baseUpdatedAt: confirmedAt,
+        dirty: false,
+      });
       setSaveState("saved");
       return true;
     },
@@ -666,7 +716,7 @@ function RoomPage() {
       filesRef.current = normalized;
       activePathRef.current = nextActivePath;
       dirtyRef.current = true;
-      writeDraftCache(code, normalized, nextActivePath);
+      writeDraftCache(code, normalized, nextActivePath, { dirty: true });
       setSaveState("saving");
       if (persistTimer.current) clearTimeout(persistTimer.current);
       // Debounce DB writes: with 30+ users typing, saving on every keystroke
@@ -692,7 +742,7 @@ function RoomPage() {
           activePathRef.current = nextActive;
           setActivePath(nextActive);
         }
-        writeDraftCache(code, normalized, activePathRef.current);
+        writeDraftCache(code, normalized, activePathRef.current, { dirty: true });
         return normalized;
       });
     },
@@ -705,12 +755,48 @@ function RoomPage() {
       clearTimeout(persistTimer.current);
       persistTimer.current = null;
     }
-    writeDraftCache(code, filesRef.current, activePathRef.current);
+    writeDraftCache(code, filesRef.current, activePathRef.current, { dirty: true });
     void saveProject(filesRef.current, activePathRef.current);
   }, [code, saveProject]);
 
+  // Fire-and-forget save that survives page unload (normal fetch is aborted).
+  const persistBeacon = useCallback(() => {
+    if (!loadedRef.current || !dirtyRef.current) return;
+    const payload = serializeProject(filesRef.current, activePathRef.current);
+    if (payload === lastSavedPayloadRef.current) return;
+    writeDraftCache(code, filesRef.current, activePathRef.current, { dirty: true });
+    const url = import.meta.env.VITE_SUPABASE_URL;
+    const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+    if (!url || !key) return;
+    try {
+      void fetch(`${url}/rest/v1/rooms?on_conflict=code`, {
+        method: "POST",
+        keepalive: true,
+        headers: {
+          "Content-Type": "application/json",
+          apikey: key,
+          Authorization: `Bearer ${key}`,
+          Prefer: "resolution=merge-duplicates,return=minimal",
+        },
+        body: JSON.stringify({
+          code,
+          content: payload,
+          language: "web",
+          updated_at: new Date().toISOString(),
+        }),
+      });
+    } catch {
+      /* best effort */
+    }
+  }, [code]);
+
   useEffect(() => {
     let cancelled = false;
+    // Guard: this effect must run exactly once per room code. Re-running it
+    // would overwrite in-progress edits with the last server snapshot.
+    if (loadOnceRef.current === code) return;
+    loadOnceRef.current = code;
+
     (async () => {
       const { data, error } = await supabase
         .from("rooms")
@@ -718,11 +804,19 @@ function RoomPage() {
         .eq("code", code)
         .maybeSingle();
 
-      const remoteFiles = parseStoredContent(error ? null : data?.content);
+      const hasRemoteRow = !error && !!data?.content;
+      const remoteFiles = parseStoredContent(hasRemoteRow ? data!.content : null);
       const remoteUpdatedAt = data?.updated_at ? new Date(data.updated_at).getTime() : 0;
+      remoteUpdatedAtRef.current = remoteUpdatedAt;
       const cached = readDraftCache(code);
-      const shouldUseCache = !!cached && cached.savedAt >= remoteUpdatedAt;
-      const initialFiles = shouldUseCache ? cached.files : remoteFiles;
+
+      // Prefer the local cache whenever the server has nothing newer than what
+      // the cache was based on (server-vs-server comparison, no clock skew),
+      // or when the fetch failed / the room row does not exist yet.
+      const shouldUseCache =
+        !!cached && (!hasRemoteRow || cached.baseUpdatedAt >= remoteUpdatedAt || cached.dirty);
+
+      const initialFiles = shouldUseCache && cached ? cached.files : remoteFiles;
       const initialActivePath =
         shouldUseCache && cached && initialFiles[cached.activePath] !== undefined
           ? cached.activePath
@@ -730,23 +824,29 @@ function RoomPage() {
             ? "index.html"
             : sortFiles(initialFiles)[0];
 
-      if (!cancelled) {
-        setFiles(initialFiles);
-        setActivePath(initialActivePath);
-        filesRef.current = initialFiles;
-        activePathRef.current = initialActivePath;
-        writeDraftCache(code, initialFiles, initialActivePath);
-        lastSavedPayloadRef.current = shouldUseCache
-          ? ""
-          : serializeProject(initialFiles, initialActivePath);
-        setPreviewSrcDoc(buildPreviewHtml(initialFiles));
-        setLoaded(true);
-        loadedRef.current = true;
-        setSaveState(shouldUseCache ? "saving" : "saved");
-        if (shouldUseCache) {
-          dirtyRef.current = true;
-          void saveProject(initialFiles, initialActivePath);
-        }
+      if (cancelled) return;
+
+      setFiles(initialFiles);
+      setActivePath(initialActivePath);
+      filesRef.current = initialFiles;
+      activePathRef.current = initialActivePath;
+      const initialPayload = serializeProject(initialFiles, initialActivePath);
+      const remotePayload = hasRemoteRow ? serializeProject(remoteFiles, initialActivePath) : "";
+      const needsSave = initialPayload !== remotePayload;
+      lastSavedPayloadRef.current = needsSave ? "" : initialPayload;
+      writeDraftCache(code, initialFiles, initialActivePath, {
+        baseUpdatedAt: remoteUpdatedAt,
+        dirty: needsSave,
+      });
+      setPreviewSrcDoc(buildPreviewHtml(initialFiles));
+      setLoaded(true);
+      loadedRef.current = true;
+      setSaveState(needsSave ? "saving" : "saved");
+      if (needsSave) {
+        dirtyRef.current = true;
+        void saveProject(initialFiles, initialActivePath);
+      } else {
+        dirtyRef.current = false;
       }
     })();
     return () => {
@@ -754,14 +854,22 @@ function RoomPage() {
     };
   }, [code, saveProject]);
 
+
   useEffect(() => {
-    const flush = () => persistNow();
-    window.addEventListener("beforeunload", flush);
-    return () => {
-      window.removeEventListener("beforeunload", flush);
-      flush();
+    const onUnload = () => persistBeacon();
+    const onHidden = () => {
+      if (document.visibilityState === "hidden") persistBeacon();
     };
-  }, [persistNow]);
+    window.addEventListener("beforeunload", onUnload);
+    window.addEventListener("pagehide", onUnload);
+    document.addEventListener("visibilitychange", onHidden);
+    return () => {
+      window.removeEventListener("beforeunload", onUnload);
+      window.removeEventListener("pagehide", onUnload);
+      document.removeEventListener("visibilitychange", onHidden);
+      persistNow();
+    };
+  }, [persistNow, persistBeacon]);
 
   useEffect(() => {
     if (!loaded) return;
