@@ -639,7 +639,16 @@ function RoomPage() {
   const errorCount = diagnostics?.length ?? 0;
 
 
+  // Restore chat history after hydration (localStorage during render breaks SSR).
+  const chatHydrated = useRef(false);
   useEffect(() => {
+    const cached = readChatCache(code);
+    if (cached.length > 0) setChat(cached);
+    chatHydrated.current = true;
+  }, [code]);
+
+  useEffect(() => {
+    if (!chatHydrated.current) return;
     writeChatCache(code, chat);
   }, [code, chat]);
 
