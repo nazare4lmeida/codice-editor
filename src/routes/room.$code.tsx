@@ -810,6 +810,7 @@ function RoomPage() {
   }, [code]);
 
   useEffect(() => {
+    console.debug("[Codice] load effect", { code, alreadyLoaded: loadedRef.current, lastCode: loadOnceRef.current });
     // Guard: once the room is loaded, never re-run this for the same code.
     // In React dev/StrictMode the first effect pass is intentionally cleaned
     // up and replayed; blocking the replay left the room stuck on the starter
@@ -819,6 +820,7 @@ function RoomPage() {
 
     (async () => {
       try {
+        console.debug("[Codice] fetching room", code);
         const { data, error } = await supabase
           .from("rooms")
           .select("content, updated_at")
@@ -826,6 +828,7 @@ function RoomPage() {
           .maybeSingle();
 
         const hasRemoteRow = !error && !!data?.content;
+        console.debug("[Codice] room fetched", { code, hasRemoteRow, error: error?.message });
         const remoteFiles = parseStoredContent(hasRemoteRow ? data.content : null);
         const remoteUpdatedAt = data?.updated_at ? new Date(data.updated_at).getTime() : 0;
         remoteUpdatedAtRef.current = remoteUpdatedAt;
@@ -876,6 +879,7 @@ function RoomPage() {
         }
         setLoaded(true);
         loadedRef.current = true;
+        console.debug("[Codice] room loaded", { code, activePath: initialActivePath, paths: Object.keys(initialFiles) });
         setSaveState(needsSave ? "saving" : "saved");
         if (needsSave) {
           dirtyRef.current = true;
