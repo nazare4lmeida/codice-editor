@@ -38,6 +38,12 @@ export const Route = createFileRoute("/room/$code")({
         name: "description",
         content: "Editor colaborativo ao vivo para aulas.",
       },
+      { property: "og:title", content: `Sala ${params.code} — Codice` },
+      { property: "og:description", content: "Editor colaborativo ao vivo para aulas." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:title", content: `Sala ${params.code} — Codice` },
+      { name: "twitter:description", content: "Editor colaborativo ao vivo para aulas." },
       { name: "robots", content: "noindex" },
     ],
   }),
@@ -250,6 +256,19 @@ function parseStoredContent(raw: string | null | undefined): ProjectFiles {
 
 function serializeProject(files: ProjectFiles, activePath: string) {
   return JSON.stringify({ version: 2, files: normalizeFiles(files), activePath } satisfies StoredProjectV2);
+}
+
+function filesSignature(files: ProjectFiles) {
+  const normalized = normalizeFiles(files);
+  return JSON.stringify(
+    Object.fromEntries(sortFiles(normalized).map((path) => [path, normalized[path]])),
+  );
+}
+
+const DEFAULT_PROJECT_SIGNATURE = filesSignature(DEFAULT_PROJECT);
+
+function isDefaultProject(files: ProjectFiles) {
+  return filesSignature(files) === DEFAULT_PROJECT_SIGNATURE;
 }
 
 function getDraftKey(code: string) {
@@ -533,7 +552,7 @@ function buildPreviewHtml(filesInput: ProjectFiles) {
 function RoomPage() {
   const { code: rawCode } = useParams({ from: "/room/$code" });
   const code = rawCode.toUpperCase();
-  const [files, setFiles] = useState<ProjectFiles>(DEFAULT_PROJECT);
+  const [files, setFiles] = useState<ProjectFiles>({});
   const [activePath, setActivePath] = useState("index.html");
   const [loaded, setLoaded] = useState(false);
   const [saveState, setSaveState] = useState<SaveState>("saved");
@@ -621,7 +640,7 @@ function RoomPage() {
 
   const channelRef = useRef<RealtimeChannel | null>(null);
   const persistTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const filesRef = useRef<ProjectFiles>(DEFAULT_PROJECT);
+  const filesRef = useRef<ProjectFiles>({});
   const activePathRef = useRef("index.html");
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
   const lastSavedPayloadRef = useRef("");
@@ -791,67 +810,99 @@ function RoomPage() {
   }, [code]);
 
   useEffect(() => {
-    let cancelled = false;
-    // Guard: this effect must run exactly once per room code. Re-running it
-    // would overwrite in-progress edits with the last server snapshot.
-    if (loadOnceRef.current === code) return;
+    // Guard: once the room is loaded, never re-run this for the same code.
+    // In React dev/StrictMode the first effect pass is intentionally cleaned
+    // up and replayed; blocking the replay left the room stuck on the starter
+    // state / "Carregando sala…".
+    if (loadedRef.current && loadOnceRef.current === code) return;
     loadOnceRef.current = code;
 
     (async () => {
-      const { data, error } = await supabase
-        .from("rooms")
-        .select("content, updated_at")
-        .eq("code", code)
-        .maybeSingle();
+      try {
+        const { data, error } = await supabase
+          .from("rooms")
+          .select("content, updated_at")
+          .eq("code", code)
+          .maybeSingle();
 
-      const hasRemoteRow = !error && !!data?.content;
-      const remoteFiles = parseStoredContent(hasRemoteRow ? data!.content : null);
-      const remoteUpdatedAt = data?.updated_at ? new Date(data.updated_at).getTime() : 0;
-      remoteUpdatedAtRef.current = remoteUpdatedAt;
-      const cached = readDraftCache(code);
+        const hasRemoteRow = !error && !!data?.content;
+        const remoteFiles = parseStoredContent(hasRemoteRow ? data.content : null);
+        const remoteUpdatedAt = data?.updated_at ? new Date(data.updated_at).getTime() : 0;
+        remoteUpdatedAtRef.current = remoteUpdatedAt;
+        const cached = readDraftCache(code);
 
-      // Prefer the local cache whenever the server has nothing newer than what
-      // the cache was based on (server-vs-server comparison, no clock skew),
-      // or when the fetch failed / the room row does not exist yet.
-      const shouldUseCache =
-        !!cached && (!hasRemoteRow || cached.baseUpdatedAt >= remoteUpdatedAt || cached.dirty);
+        const remoteIsDefault = isDefaultProject(remoteFiles);
+        const cacheIsDefault = cached ? isDefaultProject(cached.files) : false;
+        const remoteHasRealProject = hasRemoteRow && !remoteIsDefault;
+        // Prefer local cache only when the server has nothing newer than the
+        // server snapshot that cache was based on. A stale dirty cache containing
+        // the starter project must never override a real saved project — that was
+        // what made index.html appear to "go back to the padrão" after reload.
+        const shouldUseCache =
+          !!cached &&
+          !(remoteHasRealProject && cacheIsDefault) &&
+          (!!error ||
+            !hasRemoteRow ||
+            cached.baseUpdatedAt >= remoteUpdatedAt ||
+            (cached.dirty &&
+              cached.baseUpdatedAt === 0 &&
+              (cached.savedAt >= remoteUpdatedAt || (remoteIsDefault && !cacheIsDefault))));
 
-      const initialFiles = shouldUseCache && cached ? cached.files : remoteFiles;
-      const initialActivePath =
-        shouldUseCache && cached && initialFiles[cached.activePath] !== undefined
+        const initialFiles = shouldUseCache && cached ? cached.files : remoteFiles;
+        const initialActivePath =
+          shouldUseCache && cached && initialFiles[cached.activePath] !== undefined
+            ? cached.activePath
+            : initialFiles["index.html"] !== undefined
+              ? "index.html"
+              : sortFiles(initialFiles)[0];
+
+        setFiles(initialFiles);
+        setActivePath(initialActivePath);
+        filesRef.current = initialFiles;
+        activePathRef.current = initialActivePath;
+        const initialPayload = serializeProject(initialFiles, initialActivePath);
+        const remotePayload = hasRemoteRow ? serializeProject(remoteFiles, initialActivePath) : "";
+        const needsSave = initialPayload !== remotePayload;
+        lastSavedPayloadRef.current = needsSave ? "" : initialPayload;
+        writeDraftCache(code, initialFiles, initialActivePath, {
+          baseUpdatedAt: remoteUpdatedAt,
+          dirty: needsSave,
+        });
+        try {
+          setPreviewSrcDoc(buildPreviewHtml(initialFiles));
+        } catch (previewError) {
+          console.error("Não foi possível preparar o preview inicial", previewError);
+          setPreviewSrcDoc("");
+        }
+        setLoaded(true);
+        loadedRef.current = true;
+        setSaveState(needsSave ? "saving" : "saved");
+        if (needsSave) {
+          dirtyRef.current = true;
+          void saveProject(initialFiles, initialActivePath);
+        } else {
+          dirtyRef.current = false;
+        }
+      } catch (loadError) {
+        console.error("Não foi possível carregar a sala", loadError);
+        const cached = readDraftCache(code);
+        const fallbackFiles = cached?.files ?? { ...DEFAULT_PROJECT };
+        const fallbackActivePath = cached && fallbackFiles[cached.activePath] !== undefined
           ? cached.activePath
-          : initialFiles["index.html"] !== undefined
+          : fallbackFiles["index.html"] !== undefined
             ? "index.html"
-            : sortFiles(initialFiles)[0];
-
-      if (cancelled) return;
-
-      setFiles(initialFiles);
-      setActivePath(initialActivePath);
-      filesRef.current = initialFiles;
-      activePathRef.current = initialActivePath;
-      const initialPayload = serializeProject(initialFiles, initialActivePath);
-      const remotePayload = hasRemoteRow ? serializeProject(remoteFiles, initialActivePath) : "";
-      const needsSave = initialPayload !== remotePayload;
-      lastSavedPayloadRef.current = needsSave ? "" : initialPayload;
-      writeDraftCache(code, initialFiles, initialActivePath, {
-        baseUpdatedAt: remoteUpdatedAt,
-        dirty: needsSave,
-      });
-      setPreviewSrcDoc(buildPreviewHtml(initialFiles));
-      setLoaded(true);
-      loadedRef.current = true;
-      setSaveState(needsSave ? "saving" : "saved");
-      if (needsSave) {
+            : sortFiles(fallbackFiles)[0];
+        setFiles(fallbackFiles);
+        setActivePath(fallbackActivePath);
+        filesRef.current = fallbackFiles;
+        activePathRef.current = fallbackActivePath;
+        setLoaded(true);
+        loadedRef.current = true;
         dirtyRef.current = true;
-        void saveProject(initialFiles, initialActivePath);
-      } else {
-        dirtyRef.current = false;
+        setSaveState("error");
+        setSaveError("Não consegui confirmar o código salvo agora, mas mantive o rascunho local aberto.");
       }
     })();
-    return () => {
-      cancelled = true;
-    };
   }, [code, saveProject]);
 
 
@@ -1456,15 +1507,15 @@ function RoomPage() {
             </div>
           </div>
           <div className="relative flex flex-1 overflow-hidden bg-background">
-            <CodeEditor
-              value={currentValue}
-              path={activePath}
-              onChange={(v) => updateFile(activePath, v)}
-              disabled={!loaded}
-              placeholder={loaded ? `${languageLabel(activePath)}…` : "Carregando sala…"}
-            />
-            {!loaded && (
-              <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-background/70 text-sm text-muted-foreground">
+            {loaded ? (
+              <CodeEditor
+                value={currentValue}
+                path={activePath}
+                onChange={(v) => updateFile(activePath, v)}
+                placeholder={`${languageLabel(activePath)}…`}
+              />
+            ) : (
+              <div className="absolute inset-0 flex items-center justify-center bg-background text-sm text-muted-foreground">
                 Carregando sala…
               </div>
             )}

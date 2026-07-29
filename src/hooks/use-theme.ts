@@ -1,4 +1,4 @@
-import { useCallback, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useSyncExternalStore } from "react";
 
 export type Theme = "light" | "dark";
 export type Palette = "default" | "rose" | "ocean" | "forest";
@@ -46,15 +46,10 @@ function applyPalette(palette: Palette) {
 
 type State = { theme: Theme; palette: Palette };
 
-let state: State =
-  typeof window === "undefined"
-    ? { theme: "light", palette: "default" }
-    : { theme: readInitialTheme(), palette: readInitialPalette() };
+const SERVER_STATE: State = { theme: "light", palette: "default" };
 
-if (typeof window !== "undefined") {
-  applyTheme(state.theme);
-  applyPalette(state.palette);
-}
+let state: State = SERVER_STATE;
+let hydrated = false;
 
 const listeners = new Set<() => void>();
 
@@ -72,7 +67,16 @@ function getSnapshot() {
 }
 
 function getServerSnapshot(): State {
-  return { theme: "light", palette: "default" };
+  return SERVER_STATE;
+}
+
+function hydrateThemeStore() {
+  if (typeof window === "undefined" || hydrated) return;
+  hydrated = true;
+  state = { theme: readInitialTheme(), palette: readInitialPalette() };
+  applyTheme(state.theme);
+  applyPalette(state.palette);
+  emit();
 }
 
 function setTheme(next: Theme | ((t: Theme) => Theme)) {
@@ -113,6 +117,9 @@ if (typeof window !== "undefined") {
 
 export function useTheme() {
   const snap = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+  useEffect(() => {
+    hydrateThemeStore();
+  }, []);
   const toggle = useCallback(() => setTheme((t) => (t === "dark" ? "light" : "dark")), []);
   return {
     theme: snap.theme,
