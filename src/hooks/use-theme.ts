@@ -7,7 +7,11 @@ export const PALETTES: { id: Palette; name: string; swatches: string[] }[] = [
   { id: "default", name: "Ardósia", swatches: ["#0f172a", "#334155", "#94a3b8", "#f1f5f9"] },
   { id: "rose", name: "Rosé Terroso", swatches: ["#4e413b", "#a45a6e", "#d2ac94", "#ebd5bc"] },
   { id: "ocean", name: "Marinho Sereno", swatches: ["#223047", "#4a6178", "#9db2bf", "#dde6ed"] },
-  { id: "forest", name: "Floresta Profunda", swatches: ["#050e13", "#14352f", "#5e8a75", "#92b2a2"] },
+  {
+    id: "forest",
+    name: "Floresta Profunda",
+    swatches: ["#050e13", "#14352f", "#5e8a75", "#92b2a2"],
+  },
 ];
 
 const THEME_KEY = "codice:theme";

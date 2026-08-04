@@ -141,7 +141,9 @@ function Landing() {
             </div>
             <div>
               <h1 className="text-xl font-semibold tracking-tight leading-none">Codice</h1>
-              <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Workspace de código</p>
+              <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                Workspace de código
+              </p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -153,13 +155,12 @@ function Landing() {
         <div className="grid gap-12 md:grid-cols-2 md:items-center">
           <div>
             <h2 className="text-4xl font-bold tracking-tight sm:text-5xl">
-              Um workspace onde a turma escreve código{" "}
-              <span className="text-primary">junta</span>, ao vivo.
+              Um workspace onde a turma escreve código <span className="text-primary">junta</span>,
+              ao vivo.
             </h2>
             <p className="mt-4 text-muted-foreground">
-              Codice é um workspace colaborativo com múltiplos arquivos, execução
-              isolada em sandbox e preview em tempo real. Toda a turma no mesmo
-              projeto, sem instalar nada, sem login.
+              Codice é um workspace colaborativo com múltiplos arquivos, execução isolada em sandbox
+              e preview em tempo real. Toda a turma no mesmo projeto, sem instalar nada, sem login.
             </p>
 
             <ul className="mt-8 space-y-3 text-sm">
@@ -220,9 +221,7 @@ function Landing() {
               {loading ? "Criando…" : "Criar nova sala"}
             </button>
 
-            {error && (
-              <p className="mt-4 text-sm text-destructive">{error}</p>
-            )}
+            {error && <p className="mt-4 text-sm text-destructive">{error}</p>}
           </div>
         </div>
       </div>
