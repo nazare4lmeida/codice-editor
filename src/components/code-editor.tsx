@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useRef } from "react";
 import CodeMirror, { type Extension } from "@uiw/react-codemirror";
-import { EditorView, Decoration, ViewPlugin, WidgetType, type DecorationSet, type ViewUpdate } from "@codemirror/view";
+import {
+  EditorView,
+  Decoration,
+  ViewPlugin,
+  WidgetType,
+  type DecorationSet,
+  type ViewUpdate,
+} from "@codemirror/view";
 import { html } from "@codemirror/lang-html";
 import { css } from "@codemirror/lang-css";
 import { javascript } from "@codemirror/lang-javascript";
@@ -15,10 +22,8 @@ const COLOR_RE =
 
 function toHex(color: string): string {
   if (color.startsWith("#")) {
-    if (color.length === 4)
-      return "#" + [...color.slice(1)].map((c) => c + c).join("");
-    if (color.length === 5)
-      return "#" + [...color.slice(1, 4)].map((c) => c + c).join("");
+    if (color.length === 4) return "#" + [...color.slice(1)].map((c) => c + c).join("");
+    if (color.length === 5) return "#" + [...color.slice(1, 4)].map((c) => c + c).join("");
     return color.length >= 7 ? color.slice(0, 7) : color;
   }
   const m = color.match(/[\d.]+/g);
@@ -28,7 +33,11 @@ function toHex(color: string): string {
 }
 
 class ColorSwatchWidget extends WidgetType {
-  constructor(readonly color: string, readonly from: number, readonly to: number) {
+  constructor(
+    readonly color: string,
+    readonly from: number,
+    readonly to: number,
+  ) {
     super();
   }
   eq(other: ColorSwatchWidget) {
@@ -146,7 +155,10 @@ export function CodeEditor({ value, path, onChange, disabled, placeholder }: Cod
       colorSwatchPlugin,
       EditorView.theme({
         "&": { height: "100%", fontSize: "13px" },
-        ".cm-scroller": { fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", lineHeight: "1.55" },
+        ".cm-scroller": {
+          fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+          lineHeight: "1.55",
+        },
         ".cm-content": { padding: "12px 0" },
         ".cm-gutters": { backgroundColor: "transparent", border: "none" },
       }),
@@ -221,4 +233,3 @@ export function CodeEditor({ value, path, onChange, disabled, placeholder }: Cod
     />
   );
 }
-

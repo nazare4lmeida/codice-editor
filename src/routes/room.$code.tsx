@@ -29,7 +29,6 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { PalettePicker } from "@/components/palette-picker";
 import { CodeEditor } from "@/components/code-editor";
 
-
 export const Route = createFileRoute("/room/$code")({
   head: ({ params }) => ({
     meta: [
@@ -255,7 +254,11 @@ function parseStoredContent(raw: string | null | undefined): ProjectFiles {
 }
 
 function serializeProject(files: ProjectFiles, activePath: string) {
-  return JSON.stringify({ version: 2, files: normalizeFiles(files), activePath } satisfies StoredProjectV2);
+  return JSON.stringify({
+    version: 2,
+    files: normalizeFiles(files),
+    activePath,
+  } satisfies StoredProjectV2);
 }
 
 function filesSignature(files: ProjectFiles) {
@@ -326,7 +329,6 @@ function writeDraftCache(
   }
 }
 
-
 function getChatKey(code: string) {
   return `codice:room:${code}:chat:v1`;
 }
@@ -354,14 +356,55 @@ function writeChatCache(code: string, chat: ChatMsg[]) {
 }
 
 const CSS_NAMED_COLORS = new Set([
-  "black","white","red","green","blue","yellow","cyan","magenta","gray","grey",
-  "orange","purple","pink","brown","lime","navy","teal","olive","maroon","silver",
-  "gold","indigo","violet","aqua","fuchsia","coral","salmon","khaki","turquoise",
-  "tomato","tan","plum","orchid","crimson","chocolate","beige","azure","ivory",
-  "lavender","wheat","snow","transparent",
+  "black",
+  "white",
+  "red",
+  "green",
+  "blue",
+  "yellow",
+  "cyan",
+  "magenta",
+  "gray",
+  "grey",
+  "orange",
+  "purple",
+  "pink",
+  "brown",
+  "lime",
+  "navy",
+  "teal",
+  "olive",
+  "maroon",
+  "silver",
+  "gold",
+  "indigo",
+  "violet",
+  "aqua",
+  "fuchsia",
+  "coral",
+  "salmon",
+  "khaki",
+  "turquoise",
+  "tomato",
+  "tan",
+  "plum",
+  "orchid",
+  "crimson",
+  "chocolate",
+  "beige",
+  "azure",
+  "ivory",
+  "lavender",
+  "wheat",
+  "snow",
+  "transparent",
 ]);
 
-interface ColorHit { raw: string; display: string; index: number; }
+interface ColorHit {
+  raw: string;
+  display: string;
+  index: number;
+}
 
 function extractColors(css: string): ColorHit[] {
   const hits: ColorHit[] = [];
@@ -384,7 +427,6 @@ function extractColors(css: string): ColorHit[] {
   }
   return hits.slice(0, 24);
 }
-
 
 function escapeScript(content: string) {
   return content.replace(/<\/script/gi, "<\\/script");
@@ -411,23 +453,43 @@ function jsOrder(path: string) {
 }
 
 function stripJsComments(src: string) {
-  let out = "", i = 0;
+  let out = "",
+    i = 0;
   const n = src.length;
   while (i < n) {
-    const c = src[i], d = src[i + 1];
-    if (c === "/" && d === "/") { while (i < n && src[i] !== "\n") i++; continue; }
-    if (c === "/" && d === "*") { i += 2; while (i < n && !(src[i] === "*" && src[i + 1] === "/")) i++; i += 2; continue; }
+    const c = src[i],
+      d = src[i + 1];
+    if (c === "/" && d === "/") {
+      while (i < n && src[i] !== "\n") i++;
+      continue;
+    }
+    if (c === "/" && d === "*") {
+      i += 2;
+      while (i < n && !(src[i] === "*" && src[i + 1] === "/")) i++;
+      i += 2;
+      continue;
+    }
     if (c === '"' || c === "'" || c === "`") {
-      const q = c; out += c; i++;
+      const q = c;
+      out += c;
+      i++;
       while (i < n) {
-        if (src[i] === "\\") { out += src[i] + (src[i + 1] ?? ""); i += 2; continue; }
+        if (src[i] === "\\") {
+          out += src[i] + (src[i + 1] ?? "");
+          i += 2;
+          continue;
+        }
         out += src[i];
-        if (src[i] === q) { i++; break; }
+        if (src[i] === q) {
+          i++;
+          break;
+        }
         i++;
       }
       continue;
     }
-    out += c; i++;
+    out += c;
+    i++;
   }
   return out;
 }
@@ -450,8 +512,14 @@ function stripCommentsForFile(path: string, content: string) {
       out += content[i++];
     }
     // remove comentários dentro de <style> e <script> inline
-    out = out.replace(/<style\b[^>]*>([\s\S]*?)<\/style>/gi, (_, css) => `<style>${css.replace(/\/\*[\s\S]*?\*\//g, "")}</style>`);
-    out = out.replace(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi, (_, attrs, js) => `<script${attrs}>${stripJsComments(js)}</script>`);
+    out = out.replace(
+      /<style\b[^>]*>([\s\S]*?)<\/style>/gi,
+      (_, css) => `<style>${css.replace(/\/\*[\s\S]*?\*\//g, "")}</style>`,
+    );
+    out = out.replace(
+      /<script\b([^>]*)>([\s\S]*?)<\/script>/gi,
+      (_, attrs, js) => `<script${attrs}>${stripJsComments(js)}</script>`,
+    );
     return out;
   }
   return content;
@@ -459,15 +527,17 @@ function stripCommentsForFile(path: string, content: string) {
 
 function stripCommentsFromFiles(files: ProjectFiles): ProjectFiles {
   const out: ProjectFiles = {};
-  for (const [path, content] of Object.entries(files)) out[path] = stripCommentsForFile(path, content);
+  for (const [path, content] of Object.entries(files))
+    out[path] = stripCommentsForFile(path, content);
   return out;
 }
 
 function buildPreviewHtml(filesInput: ProjectFiles) {
   const files = stripCommentsFromFiles(normalizeFiles(filesInput));
-  const htmlPath = files["index.html"] !== undefined
-    ? "index.html"
-    : Object.keys(files).find((path) => fileKind(path) === "html");
+  const htmlPath =
+    files["index.html"] !== undefined
+      ? "index.html"
+      : Object.keys(files).find((path) => fileKind(path) === "html");
   let html = htmlPath
     ? files[htmlPath]
     : `<!doctype html><html><head><meta charset="utf-8" /></head><body></body></html>`;
@@ -478,7 +548,9 @@ function buildPreviewHtml(filesInput: ProjectFiles) {
 
   const used = new Set<string>(htmlPath ? [htmlPath] : []);
   const cssFiles = Object.keys(files).filter((path) => fileKind(path) === "css");
-  const jsFiles = Object.keys(files).filter((path) => fileKind(path) === "js").sort((a, b) => jsOrder(a) - jsOrder(b) || a.localeCompare(b));
+  const jsFiles = Object.keys(files)
+    .filter((path) => fileKind(path) === "js")
+    .sort((a, b) => jsOrder(a) - jsOrder(b) || a.localeCompare(b));
 
   const moduleMapEntries = jsFiles.flatMap((path) => {
     const encoded = `data:text/javascript;charset=utf-8,${encodeURIComponent(files[path])}`;
@@ -496,26 +568,34 @@ function buildPreviewHtml(filesInput: ProjectFiles) {
   window.addEventListener('unhandledrejection',function(e){parent.postMessage({__codelive:true,type:'log',level:'error',parts:[String(e.reason && e.reason.stack || e.reason)]},'*');});
 })();<\/script>`;
 
-  html = html.replace(/<link\b([^>]*?)href=["']([^"']+)["']([^>]*)>/gi, (full, before: string, href: string, after: string) => {
-    if (!/rel=["'][^"']*stylesheet/i.test(`${before} ${after}`)) return full;
-    const local = resolveLocalFile(files, href);
-    if (!local || fileKind(local) !== "css") return full;
-    used.add(local);
-    return `<style data-codelive-file="${local}">\n${files[local]}\n</style>`;
-  });
+  html = html.replace(
+    /<link\b([^>]*?)href=["']([^"']+)["']([^>]*)>/gi,
+    (full, before: string, href: string, after: string) => {
+      if (!/rel=["'][^"']*stylesheet/i.test(`${before} ${after}`)) return full;
+      const local = resolveLocalFile(files, href);
+      if (!local || fileKind(local) !== "css") return full;
+      used.add(local);
+      return `<style data-codelive-file="${local}">\n${files[local]}\n</style>`;
+    },
+  );
 
-  html = html.replace(/<script\b([^>]*?)src=["']([^"']+)["']([^>]*)><\/script>/gi, (full, before: string, src: string, after: string) => {
-    const local = resolveLocalFile(files, src);
-    if (!local || fileKind(local) !== "js") return full;
-    used.add(local);
-    const attrs = `${before} ${after}`;
-    const isModule = /type=["']module["']/i.test(attrs) || /\bimport\s.+from\s+["']|\bexport\s/m.test(files[local]);
-    if (isModule) {
-      const encoded = `data:text/javascript;charset=utf-8,${encodeURIComponent(files[local])}`;
-      return `<script type="module" src="${encoded}" data-codelive-file="${local}"><\/script>`;
-    }
-    return `<script data-codelive-file="${local}">\ntry {\n${escapeScript(files[local])}\n} catch (e) { console.error(e && e.stack || e); }\n<\/script>`;
-  });
+  html = html.replace(
+    /<script\b([^>]*?)src=["']([^"']+)["']([^>]*)><\/script>/gi,
+    (full, before: string, src: string, after: string) => {
+      const local = resolveLocalFile(files, src);
+      if (!local || fileKind(local) !== "js") return full;
+      used.add(local);
+      const attrs = `${before} ${after}`;
+      const isModule =
+        /type=["']module["']/i.test(attrs) ||
+        /\bimport\s.+from\s+["']|\bexport\s/m.test(files[local]);
+      if (isModule) {
+        const encoded = `data:text/javascript;charset=utf-8,${encodeURIComponent(files[local])}`;
+        return `<script type="module" src="${encoded}" data-codelive-file="${local}"><\/script>`;
+      }
+      return `<script data-codelive-file="${local}">\ntry {\n${escapeScript(files[local])}\n} catch (e) { console.error(e && e.stack || e); }\n<\/script>`;
+    },
+  );
 
   const extraCss = cssFiles
     .filter((path) => !used.has(path))
@@ -601,39 +681,48 @@ function RoomPage() {
 
   useEffect(() => {
     if (!layoutHydrated.current) return;
-    try { localStorage.setItem("codice:layout:output", String(outputWidth)); } catch {}
+    try {
+      localStorage.setItem("codice:layout:output", String(outputWidth));
+    } catch {}
   }, [outputWidth]);
   useEffect(() => {
     if (!layoutHydrated.current) return;
-    try { localStorage.setItem("codice:layout:aside", String(asideWidth)); } catch {}
+    try {
+      localStorage.setItem("codice:layout:aside", String(asideWidth));
+    } catch {}
   }, [asideWidth]);
 
-  const startResize = useCallback((getCurrent: () => number, setter: (n: number) => void, min: number, max: number) => (e: React.PointerEvent) => {
-    e.preventDefault();
-    const startX = e.clientX;
-    const start = getCurrent();
-    const onMove = (ev: PointerEvent) => {
-      // dragging left => grow (panel is on the right side of the handle)
-      const delta = startX - ev.clientX;
-      const next = Math.min(max, Math.max(min, start + delta));
-      setter(next);
-    };
-    const onUp = () => {
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-      document.body.style.cursor = "";
-      document.body.style.userSelect = "";
-    };
-    document.body.style.cursor = "col-resize";
-    document.body.style.userSelect = "none";
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp);
-  }, []);
+  const startResize = useCallback(
+    (getCurrent: () => number, setter: (n: number) => void, min: number, max: number) =>
+      (e: React.PointerEvent) => {
+        e.preventDefault();
+        const startX = e.clientX;
+        const start = getCurrent();
+        const onMove = (ev: PointerEvent) => {
+          // dragging left => grow (panel is on the right side of the handle)
+          const delta = startX - ev.clientX;
+          const next = Math.min(max, Math.max(min, start + delta));
+          setter(next);
+        };
+        const onUp = () => {
+          window.removeEventListener("pointermove", onMove);
+          window.removeEventListener("pointerup", onUp);
+          document.body.style.cursor = "";
+          document.body.style.userSelect = "";
+        };
+        document.body.style.cursor = "col-resize";
+        document.body.style.userSelect = "none";
+        window.addEventListener("pointermove", onMove);
+        window.addEventListener("pointerup", onUp);
+      },
+    [],
+  );
 
   const me = useMemo<Participant>(() => {
     const id = randomId();
     const name =
-      (typeof window !== "undefined" && (sessionStorage.getItem("codice:name") || sessionStorage.getItem("codelive:name"))) ||
+      (typeof window !== "undefined" &&
+        (sessionStorage.getItem("codice:name") || sessionStorage.getItem("codelive:name"))) ||
       "Convidado";
     return { id, name, color: pickColor(id) };
   }, []);
@@ -656,7 +745,6 @@ function RoomPage() {
   const currentValue = files[activePath] ?? "";
   const lineCount = currentValue ? currentValue.split("\n").length : 1;
   const errorCount = diagnostics?.length ?? 0;
-
 
   // Restore chat history after hydration (localStorage during render breaks SSR).
   const chatHydrated = useRef(false);
@@ -887,11 +975,12 @@ function RoomPage() {
         console.error("Não foi possível carregar a sala", loadError);
         const cached = readDraftCache(code);
         const fallbackFiles = cached?.files ?? { ...DEFAULT_PROJECT };
-        const fallbackActivePath = cached && fallbackFiles[cached.activePath] !== undefined
-          ? cached.activePath
-          : fallbackFiles["index.html"] !== undefined
-            ? "index.html"
-            : sortFiles(fallbackFiles)[0];
+        const fallbackActivePath =
+          cached && fallbackFiles[cached.activePath] !== undefined
+            ? cached.activePath
+            : fallbackFiles["index.html"] !== undefined
+              ? "index.html"
+              : sortFiles(fallbackFiles)[0];
         setFiles(fallbackFiles);
         setActivePath(fallbackActivePath);
         filesRef.current = fallbackFiles;
@@ -900,11 +989,12 @@ function RoomPage() {
         loadedRef.current = true;
         dirtyRef.current = true;
         setSaveState("error");
-        setSaveError("Não consegui confirmar o código salvo agora, mas mantive o rascunho local aberto.");
+        setSaveError(
+          "Não consegui confirmar o código salvo agora, mas mantive o rascunho local aberto.",
+        );
       }
     })();
   }, [code, saveProject]);
-
 
   useEffect(() => {
     const onUnload = () => persistBeacon();
@@ -961,18 +1051,23 @@ function RoomPage() {
           else next[path] = typeof p.content === "string" ? p.content : "";
           const normalized = normalizeFiles(next);
           const nextActive =
-            p.deleted && activePathRef.current === path
-              ? sortFiles(normalized)[0]
-              : undefined;
+            p.deleted && activePathRef.current === path ? sortFiles(normalized)[0] : undefined;
           return { next: normalized, nextActive };
         });
       })
       .on("broadcast", { event: "editing" }, (payload) => {
-        const p = payload.payload as { from?: string; name?: string; color?: string; path?: string } | undefined;
+        const p = payload.payload as
+          | { from?: string; name?: string; color?: string; path?: string }
+          | undefined;
         if (!p || !p.from || p.from === me.id || !p.path) return;
         setEditing((prev) => ({
           ...prev,
-          [p.from!]: { name: p.name || "Alguém", color: p.color || "#3b82f6", path: p.path!, at: Date.now() },
+          [p.from!]: {
+            name: p.name || "Alguém",
+            color: p.color || "#3b82f6",
+            path: p.path!,
+            at: Date.now(),
+          },
         }));
       })
       .on("broadcast", { event: "chat" }, (payload) => {
@@ -1008,7 +1103,6 @@ function RoomPage() {
       editingCleanupRef.current = null;
     };
   }, [loaded, code, me, updateLocalFilesFromRemote]);
-
 
   useEffect(() => {
     if (sidePanel === "chat" && chatScrollRef.current) {
@@ -1068,7 +1162,6 @@ function RoomPage() {
       return next;
     });
   }
-
 
   function createFile(name: string) {
     if (!loadedRef.current) return;
@@ -1170,7 +1263,9 @@ function RoomPage() {
 
     const merged = normalizeFiles({ ...filesRef.current, ...incoming });
     const nextActive =
-      merged["index.html"] !== undefined ? "index.html" : sortFiles(merged)[0] || activePathRef.current;
+      merged["index.html"] !== undefined
+        ? "index.html"
+        : sortFiles(merged)[0] || activePathRef.current;
     setFiles(merged);
     setActivePath(nextActive);
     schedulePersist(merged, nextActive);
@@ -1178,7 +1273,6 @@ function RoomPage() {
       broadcastPatch(path, merged[path]);
     }
   }
-
 
   function runRuntimeDiagnostics(project: ProjectFiles) {
     return new Promise<Diagnostic[]>((resolve) => {
@@ -1194,8 +1288,11 @@ function RoomPage() {
 
       const onMessage = (ev: MessageEvent) => {
         const data = ev.data;
-        if (!data || data.__codelive !== true || data.type !== "log" || data.level !== "error") return;
-        const message = Array.isArray(data.parts) ? data.parts.join(" ") : String(data.parts || "Erro em tempo de execução");
+        if (!data || data.__codelive !== true || data.type !== "log" || data.level !== "error")
+          return;
+        const message = Array.isArray(data.parts)
+          ? data.parts.join(" ")
+          : String(data.parts || "Erro em tempo de execução");
         if (found.some((diag) => diag.message === message)) return;
         found.push({
           file: "preview",
@@ -1249,14 +1346,31 @@ function RoomPage() {
         try {
           JSON.parse(content);
         } catch (e) {
-          diags.push({ file: path, message: (e as Error).message, hint: "Revise vírgulas, aspas e chaves do JSON." });
+          diags.push({
+            file: path,
+            message: (e as Error).message,
+            hint: "Revise vírgulas, aspas e chaves do JSON.",
+          });
         }
       }
 
       if (kind === "html" && content.trim()) {
         const openTags: { name: string; line: number }[] = [];
         const voidTags = new Set([
-          "area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr",
+          "area",
+          "base",
+          "br",
+          "col",
+          "embed",
+          "hr",
+          "img",
+          "input",
+          "link",
+          "meta",
+          "param",
+          "source",
+          "track",
+          "wbr",
         ]);
         const tagRe = /<\/?([a-zA-Z][a-zA-Z0-9-]*)(\s[^>]*)?>/g;
         const lines = content.split("\n");
@@ -1281,7 +1395,9 @@ function RoomPage() {
                 file: path,
                 line,
                 message: `Tag de fechamento inesperada </${name}>${last ? ` — esperava </${last.name}>` : ""}`,
-                hint: last ? `Feche primeiro a tag <${last.name}> aberta na linha ${last.line}.` : "Remova esta tag ou abra a correspondente antes.",
+                hint: last
+                  ? `Feche primeiro a tag <${last.name}> aberta na linha ${last.line}.`
+                  : "Remova esta tag ou abra a correspondente antes.",
               });
             }
           } else if (!voidTags.has(name) && !raw.endsWith("/>")) {
@@ -1289,7 +1405,12 @@ function RoomPage() {
           }
         }
         for (const tag of openTags) {
-          diags.push({ file: path, line: tag.line, message: `Tag <${tag.name}> não foi fechada`, hint: `Adicione </${tag.name}> no local apropriado.` });
+          diags.push({
+            file: path,
+            line: tag.line,
+            message: `Tag <${tag.name}> não foi fechada`,
+            hint: `Adicione </${tag.name}> no local apropriado.`,
+          });
         }
       }
 
@@ -1303,13 +1424,22 @@ function RoomPage() {
           else if (char === "}") {
             depth--;
             if (depth < 0) {
-              diags.push({ file: path, line, message: "Chave '}' sem '{' correspondente", hint: "Remova esta '}' ou adicione uma '{' antes." });
+              diags.push({
+                file: path,
+                line,
+                message: "Chave '}' sem '{' correspondente",
+                hint: "Remova esta '}' ou adicione uma '{' antes.",
+              });
               depth = 0;
             }
           }
         }
         if (depth > 0) {
-          diags.push({ file: path, message: `${depth} chave(s) '{' não fechada(s)`, hint: "Adicione '}' correspondente(s) no fim das regras." });
+          diags.push({
+            file: path,
+            message: `${depth} chave(s) '{' não fechada(s)`,
+            hint: "Adicione '}' correspondente(s) no fim das regras.",
+          });
         }
       }
     }
@@ -1359,7 +1489,8 @@ function RoomPage() {
     setChatDraft("");
   }
 
-  const saveText = saveState === "saving" ? "Salvando" : saveState === "error" ? "Erro ao salvar" : "Salvo";
+  const saveText =
+    saveState === "saving" ? "Salvando" : saveState === "error" ? "Erro ao salvar" : "Salvo";
   const editingList = useMemo(
     () => Object.entries(editing).map(([id, info]) => ({ id, ...info })),
     [editing],
@@ -1369,29 +1500,47 @@ function RoomPage() {
     <div className="flex min-h-screen flex-col bg-background text-foreground lg:h-screen lg:min-h-0 lg:overflow-hidden">
       <header className="flex flex-wrap items-center justify-between gap-3 border-b bg-card px-4 py-3">
         <div className="flex items-center gap-3">
-          <Link to="/" className="flex h-8 w-8 items-center justify-center rounded-md border hover:bg-accent" aria-label="Voltar">
+          <Link
+            to="/"
+            className="flex h-8 w-8 items-center justify-center rounded-md border hover:bg-accent"
+            aria-label="Voltar"
+          >
             <ArrowLeft className="h-4 w-4" />
           </Link>
           <div>
             <div className="text-xs text-muted-foreground">Sala</div>
             <div className="font-mono text-sm font-semibold tracking-wider">{code}</div>
           </div>
-          <button onClick={copyLink} className="ml-2 inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs font-medium hover:bg-accent">
+          <button
+            onClick={copyLink}
+            className="ml-2 inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs font-medium hover:bg-accent"
+          >
             <Copy className="h-3.5 w-3.5" />
             {copied ? "Copiado!" : "Copiar convite"}
           </button>
-          <div className={`hidden items-center gap-1 rounded-md border px-2 py-1 text-xs sm:inline-flex ${saveState === "error" ? "text-destructive" : "text-muted-foreground"}`} title={saveError || undefined}>
+          <div
+            className={`hidden items-center gap-1 rounded-md border px-2 py-1 text-xs sm:inline-flex ${saveState === "error" ? "text-destructive" : "text-muted-foreground"}`}
+            title={saveError || undefined}
+          >
             <Save className="h-3.5 w-3.5" />
             {saveText}
           </div>
         </div>
 
         <div className="flex items-center gap-2">
-          <button onClick={() => setSidePanel((p) => (p === "people" ? "none" : "people"))} className={`inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs font-medium hover:bg-accent ${sidePanel === "people" ? "bg-accent" : ""}`}>
+          <button
+            onClick={() => setSidePanel((p) => (p === "people" ? "none" : "people"))}
+            className={`inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs font-medium hover:bg-accent ${sidePanel === "people" ? "bg-accent" : ""}`}
+          >
             <Users className="h-4 w-4" />
             <div className="flex -space-x-2">
               {participants.slice(0, 4).map((p) => (
-                <div key={p.id} title={p.name} className="flex h-5 w-5 items-center justify-center rounded-full border-2 border-card text-[9px] font-semibold text-primary-foreground" style={{ backgroundColor: p.color }}>
+                <div
+                  key={p.id}
+                  title={p.name}
+                  className="flex h-5 w-5 items-center justify-center rounded-full border-2 border-card text-[9px] font-semibold text-primary-foreground"
+                  style={{ backgroundColor: p.color }}
+                >
                   {p.name.charAt(0).toUpperCase()}
                 </div>
               ))}
@@ -1399,18 +1548,36 @@ function RoomPage() {
             <span>{participants.length}</span>
           </button>
 
-          <button onClick={() => { setSidePanel((p) => (p === "chat" ? "none" : "chat")); setUnreadChat(0); }} className={`relative inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs font-medium hover:bg-accent ${sidePanel === "chat" ? "bg-accent" : ""}`}>
+          <button
+            onClick={() => {
+              setSidePanel((p) => (p === "chat" ? "none" : "chat"));
+              setUnreadChat(0);
+            }}
+            className={`relative inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs font-medium hover:bg-accent ${sidePanel === "chat" ? "bg-accent" : ""}`}
+          >
             <MessageSquare className="h-4 w-4" />
             Chat
-            {unreadChat > 0 && <span className="ml-1 rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold text-primary-foreground">{unreadChat}</span>}
+            {unreadChat > 0 && (
+              <span className="ml-1 rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold text-primary-foreground">
+                {unreadChat}
+              </span>
+            )}
           </button>
 
-          <button onClick={runValidate} disabled={running || !loaded} className="inline-flex items-center gap-2 rounded-md border bg-background px-3 py-1.5 text-sm font-medium hover:bg-accent disabled:opacity-60">
+          <button
+            onClick={runValidate}
+            disabled={running || !loaded}
+            className="inline-flex items-center gap-2 rounded-md border bg-background px-3 py-1.5 text-sm font-medium hover:bg-accent disabled:opacity-60"
+          >
             <CheckCircle2 className="h-4 w-4" />
             Executar
           </button>
 
-          <button onClick={refreshPreview} disabled={!loaded} className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60">
+          <button
+            onClick={refreshPreview}
+            disabled={!loaded}
+            className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+          >
             <Play className="h-4 w-4" />
             Preview
           </button>
@@ -1424,7 +1591,10 @@ function RoomPage() {
         <div className="flex flex-wrap items-center gap-2 border-b bg-muted/30 px-4 py-1.5 text-xs">
           <Pencil className="h-3 w-3 text-muted-foreground" />
           {editingList.map((info) => (
-            <span key={info.id} className="inline-flex items-center gap-1.5 rounded-full border bg-background px-2 py-0.5">
+            <span
+              key={info.id}
+              className="inline-flex items-center gap-1.5 rounded-full border bg-background px-2 py-0.5"
+            >
               <span className="h-2 w-2 rounded-full" style={{ backgroundColor: info.color }} />
               <strong className="font-medium">{info.name}</strong>
               <span className="text-muted-foreground">está editando</span>
@@ -1435,17 +1605,24 @@ function RoomPage() {
       )}
 
       <main className="flex flex-1 flex-col lg:min-h-0 lg:flex-row">
-
         <section className="flex min-h-[50vh] flex-1 flex-col border-b lg:min-h-0 lg:min-w-0 lg:border-b-0 lg:border-r">
           <div className="flex items-center gap-0 overflow-x-auto border-b bg-muted/40 text-xs">
             {orderedPaths.map((path) => (
-              <button key={path} disabled={!loaded} onClick={() => setActivePath(path)} className={`inline-flex shrink-0 items-center gap-1.5 border-r px-3 py-2 disabled:opacity-60 ${activePath === path ? "bg-background font-medium text-foreground" : "text-muted-foreground hover:bg-accent"}`}>
+              <button
+                key={path}
+                disabled={!loaded}
+                onClick={() => setActivePath(path)}
+                className={`inline-flex shrink-0 items-center gap-1.5 border-r px-3 py-2 disabled:opacity-60 ${activePath === path ? "bg-background font-medium text-foreground" : "text-muted-foreground hover:bg-accent"}`}
+              >
                 <FileCode className="h-3.5 w-3.5" />
                 {path}
               </button>
             ))}
             {addingFile ? (
-              <form onSubmit={submitNewFile} className="flex shrink-0 items-center gap-1 border-r bg-background px-2 py-1">
+              <form
+                onSubmit={submitNewFile}
+                className="flex shrink-0 items-center gap-1 border-r bg-background px-2 py-1"
+              >
                 <input
                   autoFocus
                   disabled={!loaded}
@@ -1454,13 +1631,31 @@ function RoomPage() {
                   placeholder="app.js"
                   className="h-7 w-32 rounded border bg-background px-2 text-xs outline-none focus:ring-2 focus:ring-ring"
                 />
-                <button type="submit" disabled={!loaded} className="rounded border px-2 py-1 text-xs font-medium hover:bg-accent disabled:opacity-60">Criar</button>
-                <button type="button" onClick={() => { setAddingFile(false); setNewFileName(""); }} className="rounded p-1 hover:bg-accent" aria-label="Cancelar novo arquivo">
+                <button
+                  type="submit"
+                  disabled={!loaded}
+                  className="rounded border px-2 py-1 text-xs font-medium hover:bg-accent disabled:opacity-60"
+                >
+                  Criar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAddingFile(false);
+                    setNewFileName("");
+                  }}
+                  className="rounded p-1 hover:bg-accent"
+                  aria-label="Cancelar novo arquivo"
+                >
                   <X className="h-3.5 w-3.5" />
                 </button>
               </form>
             ) : (
-              <button onClick={() => setAddingFile(true)} disabled={!loaded} className="inline-flex shrink-0 items-center gap-1.5 border-r px-3 py-2 text-muted-foreground hover:bg-accent disabled:opacity-60">
+              <button
+                onClick={() => setAddingFile(true)}
+                disabled={!loaded}
+                className="inline-flex shrink-0 items-center gap-1.5 border-r px-3 py-2 text-muted-foreground hover:bg-accent disabled:opacity-60"
+              >
                 <Plus className="h-3.5 w-3.5" />
                 Novo arquivo
               </button>
@@ -1500,7 +1695,13 @@ function RoomPage() {
                 <Download className="h-3.5 w-3.5" />
               </button>
               {orderedPaths.length > 1 && (
-                <button onClick={deleteActiveFile} disabled={!loaded} className="rounded p-1 hover:bg-accent disabled:opacity-60" aria-label="Excluir arquivo ativo" title="Excluir arquivo ativo">
+                <button
+                  onClick={deleteActiveFile}
+                  disabled={!loaded}
+                  className="rounded p-1 hover:bg-accent disabled:opacity-60"
+                  aria-label="Excluir arquivo ativo"
+                  title="Excluir arquivo ativo"
+                >
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>
               )}
@@ -1520,7 +1721,6 @@ function RoomPage() {
               </div>
             )}
           </div>
-
         </section>
 
         <div
@@ -1539,48 +1739,104 @@ function RoomPage() {
         >
           <div className="flex items-center justify-between border-b bg-muted/40 px-3 py-1.5 text-xs">
             <div className="flex items-center gap-1">
-              <button onClick={() => setActiveTab("validate")} className={`inline-flex items-center gap-1.5 rounded px-2 py-1 ${activeTab === "validate" ? "bg-background font-medium text-foreground shadow-sm" : "text-muted-foreground hover:bg-accent"}`}>
+              <button
+                onClick={() => setActiveTab("validate")}
+                className={`inline-flex items-center gap-1.5 rounded px-2 py-1 ${activeTab === "validate" ? "bg-background font-medium text-foreground shadow-sm" : "text-muted-foreground hover:bg-accent"}`}
+              >
                 <CheckCircle2 className="h-3.5 w-3.5" />
                 Executar
-                {diagnostics !== null && <span className={`ml-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${errorCount === 0 ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400" : "bg-destructive/15 text-destructive"}`}>{errorCount === 0 ? "OK" : errorCount}</span>}
+                {diagnostics !== null && (
+                  <span
+                    className={`ml-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${errorCount === 0 ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400" : "bg-destructive/15 text-destructive"}`}
+                  >
+                    {errorCount === 0 ? "OK" : errorCount}
+                  </span>
+                )}
               </button>
-              <button onClick={() => setActiveTab("preview")} className={`inline-flex items-center gap-1.5 rounded px-2 py-1 ${activeTab === "preview" ? "bg-background font-medium text-foreground shadow-sm" : "text-muted-foreground hover:bg-accent"}`}>
+              <button
+                onClick={() => setActiveTab("preview")}
+                className={`inline-flex items-center gap-1.5 rounded px-2 py-1 ${activeTab === "preview" ? "bg-background font-medium text-foreground shadow-sm" : "text-muted-foreground hover:bg-accent"}`}
+              >
                 <Layout className="h-3.5 w-3.5" />
                 Preview
               </button>
-              <button onClick={() => setActiveTab("console")} className={`inline-flex items-center gap-1.5 rounded px-2 py-1 ${activeTab === "console" ? "bg-background font-medium text-foreground shadow-sm" : "text-muted-foreground hover:bg-accent"}`}>
+              <button
+                onClick={() => setActiveTab("console")}
+                className={`inline-flex items-center gap-1.5 rounded px-2 py-1 ${activeTab === "console" ? "bg-background font-medium text-foreground shadow-sm" : "text-muted-foreground hover:bg-accent"}`}
+              >
                 <Terminal className="h-3.5 w-3.5" />
                 Console ({consoleEntries.length})
               </button>
             </div>
-            {activeTab === "preview" && <button onClick={refreshPreview} className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs hover:bg-accent"><Eye className="h-3 w-3" />Atualizar</button>}
-            {activeTab === "console" && consoleEntries.length > 0 && <button onClick={() => setConsoleEntries([])} className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs hover:bg-accent"><Trash2 className="h-3 w-3" />Limpar</button>}
+            {activeTab === "preview" && (
+              <button
+                onClick={refreshPreview}
+                className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs hover:bg-accent"
+              >
+                <Eye className="h-3 w-3" />
+                Atualizar
+              </button>
+            )}
+            {activeTab === "console" && consoleEntries.length > 0 && (
+              <button
+                onClick={() => setConsoleEntries([])}
+                className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs hover:bg-accent"
+              >
+                <Trash2 className="h-3 w-3" />
+                Limpar
+              </button>
+            )}
           </div>
 
           <div className="relative flex-1 overflow-hidden">
             {activeTab === "preview" && (
-              <iframe title="preview" sandbox="allow-scripts allow-forms allow-modals allow-popups allow-downloads" srcDoc={previewSrcDoc} className="h-full w-full border-0 bg-white" />
+              <iframe
+                title="preview"
+                sandbox="allow-scripts allow-forms allow-modals allow-popups allow-downloads"
+                srcDoc={previewSrcDoc}
+                className="h-full w-full border-0 bg-white"
+              />
             )}
 
             {activeTab === "validate" && (
               <div className="h-full overflow-y-auto p-3 text-xs">
                 {diagnostics === null ? (
-                  <p className="text-muted-foreground">Clique em <strong>Executar</strong> para verificar erros de HTML, CSS, JavaScript e JSON.</p>
+                  <p className="text-muted-foreground">
+                    Clique em <strong>Executar</strong> para verificar erros de HTML, CSS,
+                    JavaScript e JSON.
+                  </p>
                 ) : diagnostics.length === 0 ? (
                   <div className="flex items-start gap-2 rounded-md border border-emerald-500/30 bg-emerald-500/10 p-3 text-emerald-700 dark:text-emerald-300">
                     <CheckCircle2 className="mt-0.5 h-4 w-4 flex-shrink-0" />
-                    <div><div className="font-semibold">Tudo certo!</div><div className="mt-0.5 text-xs opacity-90">Nenhum erro de sintaxe encontrado. Use Preview para interagir com o site.</div></div>
+                    <div>
+                      <div className="font-semibold">Tudo certo!</div>
+                      <div className="mt-0.5 text-xs opacity-90">
+                        Nenhum erro de sintaxe encontrado. Use Preview para interagir com o site.
+                      </div>
+                    </div>
                   </div>
                 ) : (
                   <div className="space-y-2">
                     {diagnostics.map((d, i) => (
-                      <div key={`${d.file}-${i}`} className="rounded-md border border-destructive/30 bg-destructive/5 p-3">
+                      <div
+                        key={`${d.file}-${i}`}
+                        className="rounded-md border border-destructive/30 bg-destructive/5 p-3"
+                      >
                         <div className="flex items-start gap-2">
                           <XCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-destructive" />
                           <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-destructive"><span>{d.file}</span>{d.line && <span>· linha {d.line}</span>}</div>
-                            <div className="mt-1 font-mono text-xs text-foreground">{d.message}</div>
-                            {d.hint && <div className="mt-1.5 text-xs text-muted-foreground"><strong>Como corrigir:</strong> {d.hint}</div>}
+                            <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-destructive">
+                              <span>{d.file}</span>
+                              {d.line && <span>· linha {d.line}</span>}
+                            </div>
+                            <div className="mt-1 font-mono text-xs text-foreground">
+                              {d.message}
+                            </div>
+                            {d.hint && (
+                              <div className="mt-1.5 text-xs text-muted-foreground">
+                                <strong>Como corrigir:</strong> {d.hint}
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -1593,10 +1849,15 @@ function RoomPage() {
             {activeTab === "console" && (
               <div className="h-full overflow-y-auto p-3 font-mono text-xs">
                 {consoleEntries.length === 0 ? (
-                  <p className="text-muted-foreground">Nada no console ainda. Abra o Preview e interaja com a página.</p>
+                  <p className="text-muted-foreground">
+                    Nada no console ainda. Abra o Preview e interaja com a página.
+                  </p>
                 ) : (
                   consoleEntries.map((entry, i) => (
-                    <div key={i} className={`whitespace-pre-wrap border-b border-border/50 py-1 ${entry.level === "error" ? "text-destructive" : entry.level === "warn" ? "text-yellow-600 dark:text-yellow-400" : "text-foreground"}`}>
+                    <div
+                      key={i}
+                      className={`whitespace-pre-wrap border-b border-border/50 py-1 ${entry.level === "error" ? "text-destructive" : entry.level === "warn" ? "text-yellow-600 dark:text-yellow-400" : "text-foreground"}`}
+                    >
                       {entry.parts.join(" ")}
                     </div>
                   ))
@@ -1623,17 +1884,40 @@ function RoomPage() {
             style={{ width: isDesktop ? asideWidth : undefined }}
           >
             <div className="flex items-center justify-between border-b px-3 py-2 text-sm font-semibold">
-              <span>{sidePanel === "people" ? `Participantes (${participants.length})` : "Chat da sala"}</span>
-              <button onClick={() => setSidePanel("none")} className="rounded p-1 hover:bg-accent" aria-label="Fechar"><X className="h-4 w-4" /></button>
+              <span>
+                {sidePanel === "people" ? `Participantes (${participants.length})` : "Chat da sala"}
+              </span>
+              <button
+                onClick={() => setSidePanel("none")}
+                className="rounded p-1 hover:bg-accent"
+                aria-label="Fechar"
+              >
+                <X className="h-4 w-4" />
+              </button>
             </div>
 
             {sidePanel === "people" && (
               <div className="flex-1 overflow-y-auto p-2">
-                {participants.length === 0 && <p className="p-2 text-sm text-muted-foreground">Ninguém conectado.</p>}
+                {participants.length === 0 && (
+                  <p className="p-2 text-sm text-muted-foreground">Ninguém conectado.</p>
+                )}
                 {participants.map((p) => (
-                  <div key={p.id} className="flex items-center gap-2 rounded-md px-2 py-2 hover:bg-accent">
-                    <div className="flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold text-primary-foreground" style={{ backgroundColor: p.color }}>{p.name.charAt(0).toUpperCase()}</div>
-                    <div className="flex-1 text-sm">{p.name}{p.id === me.id && <span className="ml-1 text-xs text-muted-foreground">(você)</span>}</div>
+                  <div
+                    key={p.id}
+                    className="flex items-center gap-2 rounded-md px-2 py-2 hover:bg-accent"
+                  >
+                    <div
+                      className="flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold text-primary-foreground"
+                      style={{ backgroundColor: p.color }}
+                    >
+                      {p.name.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="flex-1 text-sm">
+                      {p.name}
+                      {p.id === me.id && (
+                        <span className="ml-1 text-xs text-muted-foreground">(você)</span>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -1642,12 +1926,21 @@ function RoomPage() {
             {sidePanel === "chat" && (
               <>
                 <div ref={chatScrollRef} className="flex-1 space-y-2 overflow-y-auto p-3 text-sm">
-                  {chat.length === 0 && <p className="text-muted-foreground">Nenhuma mensagem ainda. Diga oi!</p>}
+                  {chat.length === 0 && (
+                    <p className="text-muted-foreground">Nenhuma mensagem ainda. Diga oi!</p>
+                  )}
                   {chat.map((msg) => (
                     <div key={msg.id} className="flex flex-col">
                       <div className="flex items-baseline gap-2">
-                        <span className="text-xs font-semibold" style={{ color: msg.authorColor }}>{msg.authorName}{msg.authorId === me.id && <span className="ml-1 text-muted-foreground">(você)</span>}</span>
-                        <span className="text-[10px] text-muted-foreground">{new Date(msg.at).toLocaleTimeString()}</span>
+                        <span className="text-xs font-semibold" style={{ color: msg.authorColor }}>
+                          {msg.authorName}
+                          {msg.authorId === me.id && (
+                            <span className="ml-1 text-muted-foreground">(você)</span>
+                          )}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground">
+                          {new Date(msg.at).toLocaleTimeString()}
+                        </span>
                       </div>
                       <div className="whitespace-pre-wrap break-words text-sm">{msg.text}</div>
                     </div>
@@ -1656,13 +1949,59 @@ function RoomPage() {
                 <form onSubmit={sendChat} className="relative flex gap-2 border-t p-2">
                   {emojiOpen && (
                     <div className="absolute bottom-full left-2 right-2 mb-2 grid grid-cols-8 gap-1 rounded-md border bg-popover p-2 shadow-lg z-10">
-                      {["😀","😂","😍","🥰","😎","🤔","😅","😢","😡","🥳","😴","🤯","😇","🙃","😉","😌","👍","👎","👏","🙌","🙏","💪","👀","🫶","❤️","🔥","✨","🎉","💯","✅","❌","⚠️","💡","🚀","⭐","🌟","💻","🐛","📌","📝"].map((e) => (
+                      {[
+                        "😀",
+                        "😂",
+                        "😍",
+                        "🥰",
+                        "😎",
+                        "🤔",
+                        "😅",
+                        "😢",
+                        "😡",
+                        "🥳",
+                        "😴",
+                        "🤯",
+                        "😇",
+                        "🙃",
+                        "😉",
+                        "😌",
+                        "👍",
+                        "👎",
+                        "👏",
+                        "🙌",
+                        "🙏",
+                        "💪",
+                        "👀",
+                        "🫶",
+                        "❤️",
+                        "🔥",
+                        "✨",
+                        "🎉",
+                        "💯",
+                        "✅",
+                        "❌",
+                        "⚠️",
+                        "💡",
+                        "🚀",
+                        "⭐",
+                        "🌟",
+                        "💻",
+                        "🐛",
+                        "📌",
+                        "📝",
+                      ].map((e) => (
                         <button
                           key={e}
                           type="button"
-                          onClick={() => { setChatDraft((d) => d + e); setEmojiOpen(false); }}
+                          onClick={() => {
+                            setChatDraft((d) => d + e);
+                            setEmojiOpen(false);
+                          }}
                           className="rounded p-1 text-lg hover:bg-accent"
-                        >{e}</button>
+                        >
+                          {e}
+                        </button>
                       ))}
                     </div>
                   )}
@@ -1675,8 +2014,18 @@ function RoomPage() {
                   >
                     <Smile className="h-4 w-4" />
                   </button>
-                  <input value={chatDraft} onChange={(e) => setChatDraft(e.target.value)} placeholder="Escreva uma mensagem…" className="flex-1 rounded-md border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring" />
-                  <button type="submit" className="inline-flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90"><Send className="h-3.5 w-3.5" /></button>
+                  <input
+                    value={chatDraft}
+                    onChange={(e) => setChatDraft(e.target.value)}
+                    placeholder="Escreva uma mensagem…"
+                    className="flex-1 rounded-md border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
+                  />
+                  <button
+                    type="submit"
+                    className="inline-flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+                  >
+                    <Send className="h-3.5 w-3.5" />
+                  </button>
                 </form>
               </>
             )}
@@ -1689,12 +2038,18 @@ function RoomPage() {
 
 function suggestJsFix(message: string): string | undefined {
   const m = message.toLowerCase();
-  if (m.includes("unexpected token")) return "Verifique parênteses, chaves, aspas e ponto-e-vírgula próximos ao erro.";
-  if (m.includes("unexpected end of input")) return "Provavelmente falta fechar uma chave '}', parêntese ')' ou aspas.";
-  if (m.includes("is not defined")) return "Declare a variável com let/const antes de usar ou confira o nome digitado.";
-  if (m.includes("assignment to constant")) return "Você está reatribuindo uma const. Use let se o valor precisa mudar.";
-  if (m.includes("missing ) after")) return "Falta um ')' fechando uma chamada de função ou expressão.";
-  if (m.includes("invalid or unexpected token")) return "Caractere inválido — verifique aspas, acentos ou símbolos estranhos.";
+  if (m.includes("unexpected token"))
+    return "Verifique parênteses, chaves, aspas e ponto-e-vírgula próximos ao erro.";
+  if (m.includes("unexpected end of input"))
+    return "Provavelmente falta fechar uma chave '}', parêntese ')' ou aspas.";
+  if (m.includes("is not defined"))
+    return "Declare a variável com let/const antes de usar ou confira o nome digitado.";
+  if (m.includes("assignment to constant"))
+    return "Você está reatribuindo uma const. Use let se o valor precisa mudar.";
+  if (m.includes("missing ) after"))
+    return "Falta um ')' fechando uma chamada de função ou expressão.";
+  if (m.includes("invalid or unexpected token"))
+    return "Caractere inválido — verifique aspas, acentos ou símbolos estranhos.";
   return undefined;
 }
 
